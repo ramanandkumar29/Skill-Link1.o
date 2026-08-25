@@ -108,6 +108,7 @@ export default function LexiAssistant() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [mode, setMode] = useState<LexiMode>("voice");
   const [showSettings, setShowSettings] = useState(false);
+  const [showDebugMode, setShowDebugMode] = useState(false);
   const [voiceSpeed, setVoiceSpeed] = useState<number>(1.1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
@@ -464,16 +465,14 @@ export default function LexiAssistant() {
       {
         id: "msg-0",
         sender: "lexi",
-        text: "Namaste! Main Skill-Link ki AI Assistant hoon. Conversation cleared. Aapko kis service me help chahiye?",
+        text: "Hey! How can I help you today?",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         provider: "Skill-Link AI",
+        latencyMs: 10,
         actionResult: {
-          intent: "GENERAL_CONVERSATION",
-          actionType: "SHOW_SERVICES",
-          speechText: "Namaste! Main Skill-Link ki AI Assistant hoon.",
-          payload: {
-            categories: SERVICE_CATEGORIES.slice(0, 6)
-          }
+          intent: "conversation",
+          actionType: "GENERAL_REPLY",
+          speechText: "Hey! How can I help you today?",
         }
       },
     ]);
@@ -651,6 +650,26 @@ export default function LexiAssistant() {
                     🚀 1.25x Turbo
                   </button>
                 </div>
+              </div>
+
+              {/* Developer Debug Mode Toggle */}
+              <div className="pt-2 border-t border-indigo-500/20 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">
+                    Developer Debug Mode
+                  </span>
+                  <span className="text-[9px] text-slate-500">Show Intent, Language & Pipeline metadata</span>
+                </div>
+                <button
+                  onClick={() => setShowDebugMode(!showDebugMode)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                    showDebugMode
+                      ? "bg-purple-600 border-purple-400 text-white shadow-sm"
+                      : "bg-slate-950/60 border-white/10 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {showDebugMode ? "ON" : "OFF"}
+                </button>
               </div>
             </div>
           )}
@@ -1070,11 +1089,29 @@ export default function LexiAssistant() {
                     </div>
                   )}
 
-                  {/* Metadata Bar */}
+                  {/* Developer Debug Panel (Only visible when Debug Mode is ON) */}
+                  {showDebugMode && m.actionResult?.debugInfo && (
+                    <div className="p-2.5 rounded-xl bg-purple-950/50 border border-purple-500/30 text-[10px] font-mono text-purple-200 space-y-1">
+                      <div className="flex items-center justify-between font-bold text-cyan-300 border-b border-purple-500/20 pb-1">
+                        <span>DEBUG INSPECTOR</span>
+                        <span>{m.actionResult.debugInfo.provider} ({m.actionResult.debugInfo.latencyMs}ms)</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <div>Intent: <span className="text-white font-bold">{m.actionResult.debugInfo.intent}</span></div>
+                        <div>Lang: <span className="text-white font-bold">{m.actionResult.debugInfo.language}</span></div>
+                        <div>Category: <span className="text-white font-bold">{m.actionResult.debugInfo.serviceCategory || "none"}</span></div>
+                        <div>Urgency: <span className="text-white font-bold">{m.actionResult.debugInfo.urgency}</span></div>
+                        <div>Location: <span className="text-white font-bold">{m.actionResult.debugInfo.location || "not provided"}</span></div>
+                        <div>Missing: <span className="text-amber-300 font-bold">{m.actionResult.debugInfo.missingInfo.join(", ") || "none"}</span></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Standard Metadata Bar */}
                   <div className="flex items-center gap-2 text-[9px] sm:text-[10px] text-slate-400 px-1">
                     <span>{m.time}</span>
-                    {m.provider && (
-                      <span className="px-1.5 py-0.2 rounded bg-indigo-950 border border-indigo-500/30 text-indigo-300 font-bold">
+                    {showDebugMode && m.provider && (
+                      <span className="px-1.5 py-0.2 rounded bg-indigo-950 border border-indigo-500/30 text-indigo-300 font-bold font-mono">
                         {m.provider} {m.latencyMs ? `(${m.latencyMs}ms)` : ""}
                       </span>
                     )}
