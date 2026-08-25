@@ -575,15 +575,15 @@ export function analyzeMessageAndContext(
   // ─── 6. EMERGENCY SERVICE INTENT ───────────────────────────────────────────
 
   const emergencyKeywords = [
-    "burst", "flooding", "ghar mein paani bhar raha", "short circuit", "spark", "current lag gaya",
-    "highway pe fasa", "highway breakdown", "accident", "gas leak", "urgent roadside help", "car band ho gayi highway"
+    "burst", "flooding", "ghar mein paani bhar raha", "paani bhar raha", "short circuit", "spark", "current lag gaya",
+    "highway", "highway pe fasa", "highway par band", "highway breakdown", "accident", "gas leak", "urgent roadside help", "car band ho gayi highway", "road par phas"
   ];
   const isEmergency = emergencyKeywords.some(k => norm.includes(k));
 
   if (isEmergency) {
     let cat = "roadside_sos";
-    if (norm.includes("pipe") || norm.includes("burst") || norm.includes("paani")) cat = "plumber";
-    if (norm.includes("short circuit") || norm.includes("spark") || norm.includes("current")) cat = "electrician";
+    if (norm.includes("pipe") || norm.includes("burst") || norm.includes("paani") || norm.includes("nal")) cat = "plumber";
+    if (norm.includes("short circuit") || norm.includes("spark") || norm.includes("current") || norm.includes("switchboard")) cat = "electrician";
     if (norm.includes("gas leak")) cat = "gas_emergency";
 
     const isHindi = lang === "hinglish" || lang === "hindi";
@@ -701,69 +701,200 @@ interface ServiceDetectResult {
 }
 
 function detectServiceIntent(norm: string): ServiceDetectResult | null {
-  // Check vehicle / mechanic
-  const carWords = ["car kharab", "gadi kharab", "bike start", "car breakdown", "bike breakdown", "need a mechanic", "mechanic chahiye", "book a mechanic", "car repair", "bike repair", "scooter repair"];
-  if (carWords.some(w => norm.includes(w)) || (norm.includes("car") && (norm.includes("kharab") || norm.includes("broken") || norm.includes("repair") || norm.includes("fix") || norm.includes("start")))) {
+  const isBookingDirect = (norm.includes("book ") || norm.includes("confirm booking") || norm.startsWith("book") || norm.includes("hire ")) && !norm.includes("chahiye");
+
+  // 1. Bike / Two-Wheeler Repair
+  if (
+    norm.includes("bike") || norm.includes("motorcycle") || norm.includes("scooty") || norm.includes("activa") || norm.includes("scooter") || norm.includes("two wheeler")
+  ) {
+    if (
+      norm.includes("kharab") || norm.includes("band") || norm.includes("start") || norm.includes("repair") || norm.includes("mechanic") ||
+      norm.includes("puncture") || norm.includes("service") || norm.includes("problem") || norm.includes("issue") || norm.includes("chahiye") || norm.includes("worker")
+    ) {
+      return {
+        category: "bike_repair",
+        nameEn: "Bike & Two-Wheeler Mechanic",
+        nameHi: "Bike Mechanic",
+        isBookingDirect
+      };
+    }
+  }
+
+  // 2. Car & Automobile Repair
+  if (
+    norm.includes("car") || norm.includes("gadi") || norm.includes("four wheeler") || norm.includes("automobile")
+  ) {
+    if (
+      norm.includes("kharab") || norm.includes("band") || norm.includes("start") || norm.includes("repair") || norm.includes("mechanic") ||
+      norm.includes("breakdown") || norm.includes("heating") || norm.includes("smoke") || norm.includes("chahiye") || norm.includes("worker")
+    ) {
+      return {
+        category: "mechanic_car",
+        nameEn: "Car Mechanic",
+        nameHi: "Car Mechanic",
+        isBookingDirect
+      };
+    }
+  }
+
+  // 3. General Mechanic
+  if (norm.includes("mechanic") || norm.includes("mistry")) {
     return {
       category: "mechanic_car",
-      nameEn: "Vehicle Mechanic",
-      nameHi: "Car / Bike Mechanic",
-      isBookingDirect: norm.includes("book") || norm.includes("hire") || norm.includes("bhejo")
+      nameEn: "Automobile Mechanic",
+      nameHi: "Mechanic",
+      isBookingDirect
     };
   }
 
-  // Check plumber
-  const plumbWords = ["plumber", "tap leak", "pipe leak", "nal kharab", "tap kharab", "pipe kharab", "bathroom leak", "sink leak", "drain blocked", "plumber chahiye", "book a plumber", "need a plumber"];
-  if (plumbWords.some(w => norm.includes(w)) || (norm.includes("leak") && (norm.includes("tap") || norm.includes("pipe") || norm.includes("sink") || norm.includes("bathroom")))) {
+  // 4. Plumber & Pipeline
+  if (
+    norm.includes("plumber") || norm.includes("tap") || norm.includes("nal") || norm.includes("pipe") || norm.includes("leak") ||
+    norm.includes("sink") || norm.includes("drain") || norm.includes("water motor") || norm.includes("water tank") || norm.includes("commode")
+  ) {
     return {
       category: "plumber",
       nameEn: "Plumber",
       nameHi: "Plumber",
-      isBookingDirect: norm.includes("book") || norm.includes("hire") || norm.includes("bhejo")
+      isBookingDirect
     };
   }
 
-  // Check electrician
-  const elecWords = ["electrician", "electrician chahiye", "book electrician", "wiring kharab", "switch kharab", "fan kharab", "mcb trip", "light repair", "fan repair"];
-  if (elecWords.some(w => norm.includes(w)) || (norm.includes("electrician") && !norm.includes("brother") && !norm.includes("friend"))) {
+  // 5. Electrician & Wiring
+  if (
+    (norm.includes("electrician") && !norm.includes("brother") && !norm.includes("friend") && !norm.includes("dost")) ||
+    norm.includes("bijli") || norm.includes("switchboard") || norm.includes("short circuit") || norm.includes("mcb") ||
+    norm.includes("fan") || norm.includes("wiring") || norm.includes("spark") || norm.includes("inverter")
+  ) {
     return {
       category: "electrician",
       nameEn: "Electrician",
       nameHi: "Electrician",
-      isBookingDirect: norm.includes("book") || norm.includes("hire") || norm.includes("bhejo")
+      isBookingDirect
     };
   }
 
-  // Check AC
-  const acWords = ["ac kaam nahi kar raha", "ac cooling", "ac not cooling", "ac repair", "ac service", "ac technician"];
-  if (acWords.some(w => norm.includes(w))) {
+  // 6. AC & Cooling
+  if (
+    norm.includes("ac ") || norm.startsWith("ac") || norm.includes("air conditioner") || norm.includes("cooling") || norm.includes("jet service")
+  ) {
+    if (norm.includes("kharab") || norm.includes("cooling") || norm.includes("thanda") || norm.includes("repair") || norm.includes("service") || norm.includes("gas") || norm.includes("chahiye")) {
+      return {
+        category: "ac",
+        nameEn: "AC Technician",
+        nameHi: "AC Technician",
+        isBookingDirect
+      };
+    }
+  }
+
+  // 7. Refrigerator / Fridge
+  if (norm.includes("fridge") || norm.includes("refrigerator") || norm.includes("freezer")) {
     return {
-      category: "ac",
-      nameEn: "AC Technician",
-      nameHi: "AC Technician",
-      isBookingDirect: norm.includes("book") || norm.includes("hire") || norm.includes("bhejo")
+      category: "refrigerator_repair",
+      nameEn: "Refrigerator Technician",
+      nameHi: "Fridge Repair",
+      isBookingDirect
     };
   }
 
-  // Check cleaning
-  const cleanWords = ["cleaning chahiye", "house cleaning", "deep clean", "sofa cleaning", "ghar ki safai"];
-  if (cleanWords.some(w => norm.includes(w))) {
+  // 8. Washing Machine
+  if (norm.includes("washing machine") || norm.includes("washer") || norm.includes("kapde dhone wali machine")) {
+    return {
+      category: "washing_machine_repair",
+      nameEn: "Washing Machine Technician",
+      nameHi: "Washing Machine Repair",
+      isBookingDirect
+    };
+  }
+
+  // 9. Laptop & Computer
+  if (norm.includes("laptop") || norm.includes("computer") || norm.includes("pc ") || norm.includes("desktop") || norm.includes("blue screen")) {
+    return {
+      category: "computer_repair",
+      nameEn: "Computer & Laptop Engineer",
+      nameHi: "Laptop Repair",
+      isBookingDirect
+    };
+  }
+
+  // 10. Mobile Phone
+  if (norm.includes("mobile") || norm.includes("phone ki screen") || norm.includes("smartphone") || norm.includes("touch screen") || norm.includes("charging jack")) {
+    return {
+      category: "mobile_repair",
+      nameEn: "Mobile Phone Technician",
+      nameHi: "Mobile Repair",
+      isBookingDirect
+    };
+  }
+
+  // 11. RO & Water Purifier
+  if (norm.includes("ro ") || norm.startsWith("ro") || norm.includes("water purifier") || norm.includes("aquaguard") || norm.includes("kent ro")) {
+    return {
+      category: "ro_repair",
+      nameEn: "RO & Water Purifier Technician",
+      nameHi: "RO Purifier Service",
+      isBookingDirect
+    };
+  }
+
+  // 12. Carpenter & Woodwork
+  if (norm.includes("carpenter") || norm.includes("badhai") || norm.includes("furniture") || norm.includes("door lock") || norm.includes("darwaza jam")) {
+    return {
+      category: "carpenter",
+      nameEn: "Carpenter",
+      nameHi: "Carpenter",
+      isBookingDirect
+    };
+  }
+
+  // 13. Painter
+  if (norm.includes("painter") || norm.includes("painting") || norm.includes("wall paint") || norm.includes("putty") || norm.includes("seelan")) {
+    return {
+      category: "painter",
+      nameEn: "House Painter",
+      nameHi: "Painter",
+      isBookingDirect
+    };
+  }
+
+  // 14. Deep Cleaning
+  if (norm.includes("cleaning") || norm.includes("deep clean") || norm.includes("sofa clean") || norm.includes("safai") || norm.includes("bathroom clean")) {
     return {
       category: "cleaning",
-      nameEn: "Home Cleaning",
-      nameHi: "Deep Cleaning",
-      isBookingDirect: norm.includes("book") || norm.includes("hire") || norm.includes("bhejo")
+      nameEn: "Home Deep Cleaner",
+      nameHi: "Home Cleaning",
+      isBookingDirect
     };
   }
 
-  // Check appliances
-  const appWords = ["fridge kharab", "refrigerator repair", "washing machine repair", "microwave repair", "geyser repair"];
-  if (appWords.some(w => norm.includes(w))) {
+  // 15. CCTV
+  if (norm.includes("cctv") || norm.includes("security camera") || norm.includes("dvr")) {
     return {
-      category: "appliances",
-      nameEn: "Appliance Repair",
-      nameHi: "Appliance Repair",
-      isBookingDirect: norm.includes("book") || norm.includes("hire") || norm.includes("bhejo")
+      category: "cctv_service",
+      nameEn: "CCTV Technician",
+      nameHi: "CCTV Installation",
+      isBookingDirect
+    };
+  }
+
+  // 16. Internet / WiFi
+  if (norm.includes("wifi") || norm.includes("router") || norm.includes("broadband") || norm.includes("lan cable")) {
+    return {
+      category: "wifi_technician",
+      nameEn: "WiFi & Internet Technician",
+      nameHi: "WiFi Technician",
+      isBookingDirect
+    };
+  }
+
+  // 17. TV Repair
+  if (norm.includes("tv ") || norm.startsWith("tv") || norm.includes("led tv") || norm.includes("television")) {
+    return {
+      category: "tv_repair",
+      nameEn: "TV Technician",
+      nameHi: "TV Repair",
+      isBookingDirect
     };
   }
 

@@ -208,54 +208,46 @@ async function handleDeterministicFallback(query = "", userContext = {}) {
     return { reply: "Aapka swagat hai! Kisi aur cheez mein madad chahiye toh zaroor batayein.", provider: "Skill-Link Intelligence" };
   }
 
-  // 3. Service inquiries
-  if (q.includes("car") || q.includes("breakdown") || q.includes("mechanic") || q.includes("gadi")) {
-    if (q.includes("chandigarh") || q.includes("delhi") || q.includes("sector") || userContext.location) {
-      const loc = userContext.location || "Chandigarh";
-      const toolOutput = await searchWorkersTool.execute({ category: "mechanic_car", location: loc });
+  // 3. Service Inquiries via Seeded NLP Dictionary
+  const { matchServiceFromText } = require("../seed/serviceAliases.seed");
+  const serviceMatch = matchServiceFromText(q);
+
+  if (serviceMatch) {
+    const loc = userContext.location || (q.includes("chandigarh") ? "Chandigarh" : (q.includes("delhi") ? "Delhi" : null));
+    const cat = serviceMatch.category;
+
+    if (loc) {
+      const toolOutput = await searchWorkersTool.execute({ category: cat, location: loc });
       return {
-        reply: `Okay. ${loc} mein mechanic service ke liye verified workers check karta hoon.`,
+        reply: `Bilkul! ${loc} mein ${cat.replace(/_/g, " ")} ke liye verified workers check karta hoon.`,
+        intent: "service_request",
         toolCalled: "searchWorkers",
         toolResult: toolOutput,
         provider: "Skill-Link Intelligence + Tool Dispatch"
       };
+    } else {
+      return {
+        reply: `Samajh gaya. ${cat.replace(/_/g, " ")} service ke liye aapki current location kya hai?`,
+        intent: "service_request",
+        provider: "Skill-Link Intelligence"
+      };
     }
-    return { reply: "Samajh gaya. Aapko mechanic ki help chahiye. Aapki current location kya hai?", provider: "Skill-Link Intelligence" };
   }
 
-  if (q.includes("plumber") || q.includes("leak") || q.includes("pipe") || q.includes("tap") || q.includes("nal")) {
-    if (q.includes("chandigarh") || q.includes("delhi") || userContext.location) {
-      const loc = userContext.location || "Chandigarh";
-      const toolOutput = await searchWorkersTool.execute({ category: "plumber", location: loc });
-      return {
-        reply: `Sure. ${loc} mein available verified plumbers check karta hoon.`,
-        toolCalled: "searchWorkers",
-        toolResult: toolOutput,
-        provider: "Skill-Link Intelligence + Tool Dispatch"
-      };
-    }
-    return { reply: "Sure. Aapko plumber kis location par chahiye?", provider: "Skill-Link Intelligence" };
-  }
-
-  if (q.includes("electrician") || q.includes("short circuit") || q.includes("spark") || q.includes("bijli")) {
-    if (q.includes("chandigarh") || q.includes("delhi") || userContext.location) {
-      const loc = userContext.location || "Chandigarh";
-      const toolOutput = await searchWorkersTool.execute({ category: "electrician", location: loc });
-      return {
-        reply: `Samajh gaya. ${loc} mein certified electricians check karta hoon.`,
-        toolCalled: "searchWorkers",
-        toolResult: toolOutput,
-        provider: "Skill-Link Intelligence + Tool Dispatch"
-      };
-    }
-    return { reply: "Samajh gaya. Electrician service ke liye aapki location kya hai?", provider: "Skill-Link Intelligence" };
+  // 4. Platform Questions
+  if (q.includes("skill-link") || q.includes("skill link")) {
+    return {
+      reply: "Skill-Link ek AI-powered service marketplace hai jo aapko instant verified local technicians (plumbers, electricians, mechanics, etc.) se connect karta hai.",
+      intent: "skill_link_question",
+      provider: "Skill-Link Intelligence"
+    };
   }
 
   if (q.includes("what is javascript") || q.includes("what is js")) {
     return { reply: "JavaScript is a lightweight, interpreted programming language widely used to build interactive websites.", provider: "Skill-Link Intelligence" };
   }
 
-  return { reply: "Hey! Aap batao, aaj main aapki kya madad kar sakta hoon?", provider: "Skill-Link Intelligence" };
+  return { reply: "Hey! Aap batao, aaj main aapki kya madad kar sakta hoon?", intent: "conversation", provider: "Skill-Link Intelligence" };
 }
 
 module.exports = { callOpenRouterAI };
