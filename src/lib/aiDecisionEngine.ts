@@ -251,85 +251,129 @@ export function processUserUtterance(
     pendingCategory: currentState?.selectedCategory
   });
 
-  // ─── 1. GENERAL CONVERSATION (GREETINGS, DIY, PROBLEM MENTION WITHOUT BOOKING) ───
+  // ─── 1. GENERAL CONVERSATION (CHATGPT-LIKE DEFAULT: GREETINGS, CHAT, JOKES, DIY) ───
   if (intent === "GENERAL_CONVERSATION") {
-    // 1A. Pure Greeting
-    if (GREETINGS.some((g) => norm === g || (norm.split(" ").length <= 2 && norm.includes(g)))) {
+    // 1A. Greetings & Check-ins
+    if (norm === "hi" || norm === "hello" || norm === "hey" || norm === "namaste" || norm === "namaskar") {
       return {
         intent: "GENERAL_CONVERSATION",
         actionType: "GENERAL_REPLY",
-        speechText: "Namaste! Main Skill-Link ki intelligent AI assistant hoon. Main aapki kya madad kar sakti hoon? Aap mujhse kisi bhi service ke baare me pooch sakte hain ya koi technical guidance le sakte hain.",
-        thought: "User gave a friendly greeting. Responding conversationally without activating booking.",
+        speechText: "Hey! 👋 How can I help you today?",
+        thought: "Friendly greeting. Responding naturally like ChatGPT.",
+      };
+    }
+
+    if (norm.includes("how are you") || norm.includes("kaise ho") || norm.includes("kya haal")) {
+      return {
+        intent: "GENERAL_CONVERSATION",
+        actionType: "GENERAL_REPLY",
+        speechText: "I'm doing great! 😄 What can I help you with?",
+        thought: "Friendly check-in response.",
+      };
+    }
+
+    if (norm.includes("joke") || norm.includes("chutkula")) {
+      return {
+        intent: "GENERAL_CONVERSATION",
+        actionType: "GENERAL_REPLY",
+        speechText: "Why did the developer go broke? Because he used up all his cache! 😄",
+        thought: "Told a friendly programming joke.",
+      };
+    }
+
+    if (norm.includes("bored") || norm.includes("bore ho")) {
+      return {
+        intent: "GENERAL_CONVERSATION",
+        actionType: "GENERAL_REPLY",
+        speechText: "Let's fix that 😄 Want to chat, play a quick trivia game, or talk about something interesting?",
+        thought: "Conversational response to boredom.",
+      };
+    }
+
+    // 1B. Questions about Skill-Link platform itself
+    if (norm.includes("what is skill-link") || norm.includes("what is skill link") || norm.includes("skill-link kya hai") || norm.includes("skill link kya hai")) {
+      return {
+        intent: "SERVICE_INFORMATION",
+        actionType: "SHOW_SERVICES",
+        speechText: "Skill-Link is an AI-powered service marketplace that connects clients with skilled local workers. You can simply describe what you need, and I will help identify the right service and guide you through the process.",
+        thought: "User asked about Skill-Link. Providing clear overview.",
         payload: {
           categories: SERVICE_CATEGORIES.slice(0, 6)
         }
       };
     }
 
-    // 1B. DIY Question: "How to fix a leaking tap / pipe"
+    if (norm.includes("how does skill-link work") || norm.includes("how it works") || norm.includes("kaise kaam karta")) {
+      return {
+        intent: "SERVICE_INFORMATION",
+        actionType: "GENERAL_REPLY",
+        speechText: "Here's how Skill-Link works: 1) You describe your issue naturally. 2) I identify the needed service. 3) Skill-Link matches available verified workers. 4) You review profiles, prices, and confirm. 5) The worker completes the job and you can rate them!",
+        thought: "Explained the 5-step Skill-Link workflow.",
+      };
+    }
+
+    if (norm.includes("future of skill-link") || norm.includes("future vision") || norm.includes("roadmap")) {
+      return {
+        intent: "SERVICE_INFORMATION",
+        actionType: "GENERAL_REPLY",
+        speechText: "Skill-Link's long-term vision is to become a complete AI-powered service ecosystem. Planned future capabilities include advanced AI matching, voice interaction, multilingual support, real-time worker tracking, predictive maintenance, and regional expansion.",
+        thought: "Discussed future vision and planned roadmap.",
+      };
+    }
+
+    // 1C. Casual talk about professions (NOT a service request)
+    if (norm.includes("my brother") || norm.includes("my friend") || norm.includes("mera dost") || norm.includes("bhai")) {
+      return {
+        intent: "GENERAL_CONVERSATION",
+        actionType: "GENERAL_REPLY",
+        speechText: "That's great! Having skilled professionals around is always awesome. 😄 What would you like to chat about?",
+        thought: "User casually mentioned someone's profession. Conversational reply without booking trigger.",
+      };
+    }
+
+    // 1D. Informational: "What does an electrician/plumber do?"
+    if (norm.includes("what does a") || norm.includes("kya karta hai")) {
+      return {
+        intent: "GENERAL_CONVERSATION",
+        actionType: "GENERAL_REPLY",
+        speechText: "Skilled technicians handle repairs, installations, diagnostics, and routine maintenance for homes and vehicles to ensure everything runs safely and efficiently.",
+        thought: "Provided educational answer to general question.",
+      };
+    }
+
+    // 1E. Problem Mention without explicit booking: Give helpful tips & ask politely
     if (norm.includes("tap") || norm.includes("leak") || norm.includes("pipe")) {
       return {
         intent: "GENERAL_CONVERSATION",
         actionType: "GENERAL_REPLY",
-        speechText: "Tap ya pipe leak fix karne ke liye: sabse pehle sink ke neeche ka angle valve ya main water valve band karein. Agar leak tap ke nozzle se hai toh washer/O-ring change karna pad sakta hai. Kya aap chahte hain ki main aapke area me available verified Plumber find karu?",
-        thought: "User asked about a leaking tap/pipe. Provided helpful DIY guidance and politely asked if they want a technician, adhering strictly to the Anti-Auto-Booking principle.",
+        speechText: "To stop a leak, first shut off the local angle valve under the sink. If water still drips, the washer or cartridge might need replacing. Would you like me to help you find a plumber?",
+        thought: "Provided DIY advice and politely asked if a technician is needed.",
         payload: {
           category: "plumber",
-          clarificationOptions: ["Find available Plumbers", "Show DIY steps only", "View all services"]
+          clarificationOptions: ["Find available Plumbers", "DIY advice only"]
         }
       };
     }
 
-    // 1C. AC Not Cooling
     if (norm.includes("ac") || norm.includes("cooling")) {
       return {
         intent: "GENERAL_CONVERSATION",
         actionType: "GENERAL_REPLY",
-        speechText: "AC cooling na karne ke mukhya kaaran ho sakte hain: dirty air filters, condenser coil par dhool, ya refrigerant gas leakage. Aap pehle filters ko wash karke check kar sakte hain. Agar problem bani rehti hai, toh kya main aapke liye nearby AC technician search karu?",
-        thought: "User mentioned AC issue. Provided basic troubleshooting and asked if technician search is desired.",
+        speechText: "AC cooling issues are commonly caused by dirty filters, dusty condenser coils, or low refrigerant gas. Try cleaning the filters first. Would you like me to check for nearby AC technicians?",
+        thought: "Provided troubleshooting tips and offered technician assistance.",
         payload: {
           category: "ac",
-          clarificationOptions: ["Search AC Technicians", "View AC Service Rates", "No, just checking"]
+          clarificationOptions: ["Search AC Technicians", "Just checking"]
         }
       };
     }
 
-    // 1D. Electrical Switch/Fan
-    if (norm.includes("electric") || norm.includes("mcb") || norm.includes("switch") || norm.includes("fan")) {
-      return {
-        intent: "GENERAL_CONVERSATION",
-        actionType: "GENERAL_REPLY",
-        speechText: "Electrical safety ke liye: kisi bhi switch ya board ko kholne se pehle main MCB switch zaroor off karein. Agar MCB baar-baar trip ho rahi hai toh load imbalance ya short circuit ho sakta hai. Kya aap chahte hain ki main paas ke certified Electrician ko search karu?",
-        thought: "User asked about electrical issue. Emphasized safety and offered technician discovery.",
-        payload: {
-          category: "electrician",
-          clarificationOptions: ["Search Electricians", "Check safety tips", "Not now"]
-        }
-      };
-    }
-
-    // 1E. Car / Bike issue mentioned without explicit request
-    if (norm.includes("car") || norm.includes("bike") || norm.includes("vehicle")) {
-      return {
-        intent: "GENERAL_CONVERSATION",
-        actionType: "GENERAL_REPLY",
-        speechText: "Gaadi start na hone par: battery terminals par carbon check karein aur lights check karein. Agar ignition par ticking sound aa rahi hai toh battery jumpstart ki zaroorat ho sakti hai. Kya aap chahte hain ki main nearest vehicle mechanic discover karu?",
-        thought: "User mentioned vehicle issue. Provided advice and offered mechanic lookup.",
-        payload: {
-          category: "mechanic_car",
-          clarificationOptions: ["Find nearby Mechanics", "Check emergency road assistance", "Thanks, got it"]
-        }
-      };
-    }
-
+    // Default conversational response
     return {
       intent: "GENERAL_CONVERSATION",
       actionType: "GENERAL_REPLY",
-      speechText: "Main samajh gayi! Skill-Link par aapko verified local technicians (Plumber, Electrician, Mechanic, AC Tech, Cleaners) milte hain. Aap mujhe batayein ki aapko kya help chahiye!",
+      speechText: "I'm here to help! Whether you'd like to chat or need assistance with a service or question, feel free to ask. 😄",
       thought: "General conversational query handled smoothly.",
-      payload: {
-        categories: SERVICE_CATEGORIES.slice(0, 8)
-      }
     };
   }
 

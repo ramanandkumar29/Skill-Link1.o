@@ -139,17 +139,14 @@ export default function LexiAssistant() {
     {
       id: "msg-0",
       sender: "lexi",
-      text: "Namaste! Main Skill-Link ki intelligent AI assistant hoon. Main aapki kya madad kar sakti hoon? Aap mujhse koi bhi query pooch sakte hain ya verified technician find karwa sakte hain.",
+      text: "Hey! 👋 How can I help you today?",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       provider: "Skill-Link AI",
-      latencyMs: 30,
+      latencyMs: 15,
       actionResult: {
         intent: "GENERAL_CONVERSATION",
-        actionType: "SHOW_SERVICES",
-        speechText: "Namaste! Main Skill-Link ki intelligent AI assistant hoon.",
-        payload: {
-          categories: SERVICE_CATEGORIES.slice(0, 6)
-        }
+        actionType: "GENERAL_REPLY",
+        speechText: "Hey! 👋 How can I help you today?",
       }
     },
   ]);
