@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --spatial-bg: #090d16;
+  }
+
+  body {
+    @apply bg-[#090d16] text-slate-100 antialiased font-sans min-h-screen selection:bg-indigo-500 selection:text-white overflow-x-hidden;
+    background-color: var(--spatial-bg);
+  }
+}
+
+/* Spatial Glassmorphism & 3D Utility Classes */
+.glass-panel-3d {
+  @apply backdrop-blur-2xl bg-slate-900/75 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)] rounded-3xl transition-all duration-300;
+}
+
+.glass-card-hover {
+  @apply hover:-translate-y-2 hover:border-indigo-500/40 hover:shadow-[0_25px_60px_rgba(79,70,229,0.25)];
+}
+
+.btn-3d-tactile {
+  @apply relative overflow-hidden bg-gradient-to-r from-indigo-600 via-indigo-500 to-emerald-500 text-white font-extrabold shadow-lg border-b-4 border-indigo-950 rounded-2xl transition-all duration-150 active:translate-y-1 active:border-b-0 hover:brightness-110 flex items-center justify-center gap-2;
+}
+
+.btn-3d-emerald-shine {
+  @apply relative overflow-hidden bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-slate-950 font-black shadow-lg border-b-4 border-emerald-950 rounded-2xl transition-all duration-150 active:translate-y-1 active:border-b-0 hover:brightness-110 flex items-center justify-center gap-2;
+}
+
+.btn-3d-amber-shine {
+  @apply relative overflow-hidden bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 font-black shadow-lg border-b-4 border-amber-950 rounded-2xl transition-all duration-150 active:translate-y-1 active:border-b-0 hover:brightness-110 flex items-center justify-center gap-2;
+}
+
+/* Energy Orb Audio Visualizer */
+.orb-visualizer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orb-visualizer-ring {
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  border: 2px solid rgba(79, 70, 229, 0.4);
+  animation: orbWave 2.5s infinite ease-out;
+}
+
+.orb-visualizer-ring-2 {
+  position: absolute;
+  inset: -32px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(16, 185, 129, 0.4);
+  animation: orbWave 3.5s infinite ease-out 0.5s;
+}
+
+@keyframes orbWave {
+  0% { transform: scale(0.9); opacity: 0.9; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+/* Glossy Shine Effect Overlay */
+.shine-overlay::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 70%
+  );
+  transform: rotate(30deg);
+  animation: shineMove 4s infinite linear;
+  pointer-events-none: none;
+}
+
+@keyframes shineMove {
+  0% { transform: translateX(-100%) rotate(30deg); }
+  100% { transform: translateX(100%) rotate(30deg); }
+}
+
+/* GPS Radar Pulse & Emergency SOS Glow */
+.radar-pulse-ring {
+  position: relative;
+}
+.radar-pulse-ring::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 2px solid #10B981;
+  animation: radarPulse 2s infinite cubic-bezier(0, 0.2, 0.8, 1);
+}
+
+@keyframes radarPulse {
+  0% { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.btn-3d-rose-sos {
+  @apply relative overflow-hidden bg-gradient-to-r from-rose-600 via-red-500 to-amber-500 text-white font-black shadow-[0_0_30px_rgba(225,29,72,0.6)] border-b-4 border-rose-950 rounded-2xl transition-all duration-150 active:translate-y-1 active:border-b-0 hover:brightness-110 flex items-center justify-center gap-2;
+}
