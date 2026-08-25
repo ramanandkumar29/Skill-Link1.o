@@ -1,0 +1,76 @@
+{
+  "troubleshooting_rules": [
+    {
+      "category": "bike_repair",
+      "symptom": "Bike start nahi ho rahi (Self start & kick not working)",
+      "possible_causes": ["Discharged battery", "Spark plug carbon deposition", "Carburetor fuel block", "Ignition switch fault"],
+      "safety_first_step": "Check if fuel valve is ON and kill switch is in RUN position.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Bike Mechanic"
+    },
+    {
+      "category": "mechanic_car",
+      "symptom": "Engine temperature gauge in RED / Steam from bonnet",
+      "possible_causes": ["Radiator coolant leak", "Thermostat valve jammed", "Radiator fan fuse blown", "Water pump failure"],
+      "safety_first_step": "Immediately pull over to a safe shoulder, turn OFF engine, and NEVER open radiator cap while hot.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Car Mechanic"
+    },
+    {
+      "category": "electrician",
+      "symptom": "Switchboard spark and burning smell",
+      "possible_causes": ["Loose wire connection", "Overloaded circuit breaker", "Melted switch contact"],
+      "safety_first_step": "Turn OFF the main MCB breaker immediately to prevent electrical fire.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Certified Electrician"
+    },
+    {
+      "category": "plumber",
+      "symptom": "Concealed wall pipe leak / Continuous tap drip",
+      "possible_causes": ["Worn rubber washer", "Teflon tape degradation", "Corroded GI/CPVC fitting", "High line pressure"],
+      "safety_first_step": "Shut off the overhead water tank main stopcock valve.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Master Plumber"
+    },
+    {
+      "category": "ac",
+      "symptom": "AC indoor unit running but blowing warm air",
+      "possible_causes": ["Compressor capacitor fail", "Refrigerant gas leak (R32/R410A)", "Choked condenser coils", "PCB sensor error"],
+      "safety_first_step": "Clean indoor mesh filters and check if outdoor fan unit is spinning.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "AC Technician"
+    },
+    {
+      "category": "refrigerator_repair",
+      "symptom": "Freezer freezing but bottom food compartment warm",
+      "possible_causes": ["Defrost heater timer faulty", "Air damper flap blocked", "Evaporator fan seized"],
+      "safety_first_step": "Ensure air vents inside fridge are not blocked with bulky food items.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Refrigerator Specialist"
+    },
+    {
+      "category": "washing_machine_repair",
+      "symptom": "Washing machine fills with water but does not drain or spin",
+      "possible_causes": ["Coin/lint clogged in drain pump filter", "Damaged drain motor", "Worn drive belt"],
+      "safety_first_step": "Unscrew the bottom drain filter cap and clear out coins or lint debris.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Washing Machine Technician"
+    },
+    {
+      "category": "computer_repair",
+      "symptom": "Laptop screen shows Blue Screen (BSOD) or boots to BIOS",
+      "possible_causes": ["Corrupt Windows boot sector", "Failing SSD/HDD", "Overheating thermal paste dry", "RAM contact oxide"],
+      "safety_first_step": "Disconnect external USB drives and power cycle.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Hardware Engineer"
+    },
+    {
+      "category": "ro_repair",
+      "symptom": "RO purifier constant beep alarm or zero pure water flow",
+      "possible_causes": ["Sediment filter choked with mud", "RO membrane scaled with TDS", "Booster pump low PSI", "Solenoid valve stuck"],
+      "safety_first_step": "Check raw inlet tap water pressure and pre-filter sediment bowl.",
+      "tool_trigger": "searchWorkers",
+      "recommended_trade": "Water Purifier Technician"
+    }
+  ]
+}
