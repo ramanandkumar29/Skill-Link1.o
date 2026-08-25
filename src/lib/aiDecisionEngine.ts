@@ -213,11 +213,346 @@ export function analyzeMessageAndContext(
   const norm = normalize(messageText);
   const lang = detectLanguage(messageText);
   const histCtx = analyzeHistory(history);
-  const detectedLocation = extractLocation(messageText) || (histCtx.askedForLocation && norm.length < 30 && !norm.includes(" ") ? messageText.trim() : null);
+  const detectedLocation = extractLocation(messageText);
 
-  // 1. Check if user is responding with a location to a previous location question
-  if (histCtx.askedForLocation && (detectedLocation || norm.length <= 25)) {
-    const loc = detectedLocation || messageText.trim();
+  // ─── 1. TOP PRIORITY: NATURAL CONVERSATIONAL & SMALL-TALK PHRASES ───────────
+
+  // A. "Mai bhi thik hu", "Mai badhiya", "Sab theek", "Doing well"
+  if (
+    norm.includes("mai bhi thik") ||
+    norm.includes("mai bhi theek") ||
+    norm.includes("main bhi theek") ||
+    norm.includes("main bhi thik") ||
+    norm.includes("hum bhi theek") ||
+    norm.includes("sab badhiya") ||
+    norm.includes("sab theek") ||
+    norm.includes("sab mast") ||
+    norm.includes("theek hu") ||
+    norm.includes("thik hu") ||
+    norm.includes("badhiya hu") ||
+    norm.includes("badhiya hoon") ||
+    norm.includes("i am good") ||
+    norm.includes("im good") ||
+    norm.includes("doing well") ||
+    norm.includes("all good") ||
+    norm.includes("great here") ||
+    norm === "badhiya" ||
+    norm === "mast" ||
+    norm === "thik" ||
+    norm === "theek" ||
+    norm === "fine" ||
+    norm === "good"
+  ) {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish" || lang === "hindi"
+        ? "Sunkar accha laga! Bataiye, aaj main aapki kya madad kar sakti hoon?"
+        : "Glad to hear that! How can I help you today?"
+    };
+  }
+
+  // B. "Kaise ho", "How are you", "Kya haal chaal"
+  if (norm.includes("kaise ho") || norm.includes("kya haal") || norm.includes("kaisa hai") || norm.includes("kaise hain")) {
+    return {
+      intent: "conversation",
+      language: "hinglish",
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "Main theek hoon. Aap batao, kaise help kar sakta hoon?"
+    };
+  }
+
+  if (norm.includes("how are you") || norm.includes("how're you") || norm.includes("how r u")) {
+    return {
+      intent: "conversation",
+      language: "english",
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "I'm doing great, thank you! How can I help you today?"
+    };
+  }
+
+  // C. Greetings ("Hi", "Hello", "Hey", "Namaste", "Salam")
+  if (norm === "hi" || norm === "hello" || norm === "hey" || norm === "namaste" || norm === "namaskar" || norm === "salam" || norm === "halo") {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish" || lang === "hindi" ? "Hey! Kaise help kar sakta hoon?" : "Hey! How can I help you today?"
+    };
+  }
+
+  // D. "Aur batao", "Kya chal raha hai", "What's up"
+  if (norm.includes("aur batao") || norm.includes("aur sunao") || norm.includes("kya chal raha") || norm.includes("kya chal rha") || norm.includes("what's up") || norm.includes("whats up") || norm === "sup") {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish" || lang === "hindi"
+        ? "Bas sab badhiya! Aap batao, aaj koi kaam ya sawaal hai?"
+        : "All good here! What's on your mind today?"
+    };
+  }
+
+  // E. "Kuch nahi", "Bas aise hi", "Nothing"
+  if (norm.includes("kuch nahi") || norm.includes("kuch nhi") || norm.includes("bas aise hi") || norm === "nothing" || norm.includes("just checking")) {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish" || lang === "hindi"
+        ? "Haha koi baat nahi! Jab bhi kisi service ya help ki zaroorat ho, bas bata dena."
+        : "No problem at all! Feel free to ask whenever you need any assistance."
+    };
+  }
+
+  // F. Gratitude ("Thanks", "Thank you", "Dhanyawad", "Shukriya")
+  if (norm.includes("thank") || norm.includes("dhanyawad") || norm.includes("shukriya") || norm.includes("dhanyavaad")) {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish" || lang === "hindi"
+        ? "Aapka swagat hai! Kisi aur cheez mein madad chahiye toh zaroor batayein."
+        : "You're very welcome! Let me know if you need anything else."
+    };
+  }
+
+  // G. Farewells ("Bye", "Goodbye", "Alvida", "Good night")
+  if (norm.includes("bye") || norm.includes("goodbye") || norm.includes("alvida") || norm.includes("good night") || norm.includes("shubh ratri")) {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish" || lang === "hindi"
+        ? "Take care! Jab bhi zaroorat ho, Skill-Link yahan hai. Alvida!"
+        : "Goodbye! Have a wonderful day, and feel free to reach out anytime."
+    };
+  }
+
+  // H. Jokes & Boredom
+  if (norm.includes("joke") || norm.includes("chutkula") || norm.includes("hasao")) {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "Why did the developer go broke? Because he used up all his cache!"
+    };
+  }
+
+  if (norm.includes("bored") || norm.includes("bore ho")) {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "Want to chat, hear a quick fun fact, or explore some handy services?"
+    };
+  }
+
+  // I. Casual mention of relatives' profession (NOT a booking)
+  if ((norm.includes("brother") || norm.includes("friend") || norm.includes("dost") || norm.includes("bhai") || norm.includes("uncle") || norm.includes("chacha")) &&
+      (norm.includes("mechanic") || norm.includes("plumber") || norm.includes("electrician") || norm.includes("engineer"))) {
+    return {
+      intent: "conversation",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "That's awesome! It's always great to have a skilled expert in the family."
+    };
+  }
+
+  // ─── 2. GENERAL TECHNICAL / WORLD KNOWLEDGE QUESTIONS ──────────────────────
+
+  if (norm.includes("what is javascript") || norm.includes("what is js")) {
+    return {
+      intent: "general_question",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "JavaScript is a lightweight, interpreted programming language widely used to build dynamic, interactive websites and scalable full-stack applications."
+    };
+  }
+
+  if (norm.includes("what is python")) {
+    return {
+      intent: "general_question",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "Python is a high-level, versatile programming language renowned for its clear syntax, readability, and powerful ecosystem across AI, machine learning, and web development."
+    };
+  }
+
+  if (norm.includes("what is java") && !norm.includes("javascript")) {
+    return {
+      intent: "general_question",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "Java is an object-oriented, class-based programming language engineered with the 'Write Once, Run Anywhere' (WORA) cross-platform philosophy."
+    };
+  }
+
+  // ─── 3. SKILL-LINK PLATFORM KNOWLEDGE (RAG) ────────────────────────────────
+
+  if (norm.includes("what is skill-link") || norm.includes("what is skill link") || norm.includes("skill-link kya hai") || norm.includes("skill link kya hai")) {
+    return {
+      intent: "skill_link_question",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish"
+        ? "Skill-Link ek AI-powered service marketplace hai jo clients ko verified local skilled workers (plumbers, electricians, mechanics, technicians) se connect karta hai. Aap bina kisi complex form ke seedhe apni problem bata sakte hain, aur main aapko suitable workers se connect kar dungi."
+        : "Skill-Link is an AI-powered service marketplace that connects clients with skilled local workers. You can simply describe what you need, and Lexi will help identify the right service and guide you through the process."
+    };
+  }
+
+  if (norm.includes("how does skill-link work") || norm.includes("how it works") || norm.includes("kaise kaam karta")) {
+    return {
+      intent: "skill_link_question",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "Skill-Link works in 5 simple steps: 1) Describe your issue naturally. 2) Lexi identifies the trade and checks location. 3) Skill-Link ranks and matches verified workers. 4) You review profiles, prices, and confirm. 5) The technician arrives and completes the job."
+    };
+  }
+
+  if (norm.includes("future of skill-link") || norm.includes("future vision") || norm.includes("roadmap") || norm.includes("future kya hai")) {
+    return {
+      intent: "skill_link_question",
+      language: lang,
+      service_category: null,
+      problem_description: null,
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: "Skill-Link's long-term roadmap aims to build a complete autonomous home & roadside service ecosystem, featuring real-time GPS technician tracking, predictive IoT maintenance, multilingual voice AI, and pan-India expansion."
+    };
+  }
+
+  // ─── 4. CANCELLATION INTENT ────────────────────────────────────────────────
+
+  if (norm === "cancel" || norm.includes("cancel booking") || norm.includes("cancel it") || norm.includes("cancel karo") || norm.includes("mat bhejo")) {
+    return {
+      intent: "cancellation_request",
+      language: lang,
+      service_category: null,
+      problem_description: "User wants to cancel booking",
+      urgency: "normal",
+      location: null,
+      location_required: false,
+      booking_requested: false,
+      missing_information: [],
+      response: lang === "hinglish"
+        ? "Aapki booking cancel kar di gayi hai. Aapka koi charge nahi katega."
+        : "Your booking request has been cancelled cleanly. No charges have been deducted."
+    };
+  }
+
+  // ─── 5. MULTI-TURN LOCATION FOLLOW-UP (AFTER ASKING LOCATION) ──────────────
+
+  const explicitLocation = detectedLocation || (
+    histCtx.askedForLocation &&
+    norm.length <= 35 &&
+    (norm.includes("chandigarh") || norm.includes("delhi") || norm.includes("sector") || norm.includes("noida") || norm.includes("gurgaon") || norm.includes("mohali") || norm.includes("panchkula"))
+      ? messageText.trim()
+      : null
+  );
+
+  if (histCtx.askedForLocation && explicitLocation) {
+    const loc = explicitLocation;
     const cat = histCtx.lastCategory || currentState?.pendingCategory || "mechanic_car";
     const isHindi = lang === "hinglish" || lang === "hindi";
 
@@ -237,25 +572,8 @@ export function analyzeMessageAndContext(
     };
   }
 
-  // 2. Cancellation Intent
-  if (norm === "cancel" || norm.includes("cancel booking") || norm.includes("cancel it") || norm.includes("cancel karo") || norm.includes("mat bhejo")) {
-    return {
-      intent: "cancellation_request",
-      language: lang,
-      service_category: null,
-      problem_description: "User wants to cancel booking",
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: lang === "hinglish"
-        ? "Aapki booking cancel kar di gayi hai. Aapka koi charge nahi katega."
-        : "Your booking request has been cancelled cleanly. No charges have been deducted."
-    };
-  }
+  // ─── 6. EMERGENCY SERVICE INTENT ───────────────────────────────────────────
 
-  // 3. Emergency Service Intent
   const emergencyKeywords = [
     "burst", "flooding", "ghar mein paani bhar raha", "short circuit", "spark", "current lag gaya",
     "highway pe fasa", "highway breakdown", "accident", "gas leak", "urgent roadside help", "car band ho gayi highway"
@@ -289,7 +607,8 @@ export function analyzeMessageAndContext(
     };
   }
 
-  // 4. Explicit or Implied Service Requests
+  // ─── 7. EXPLICIT OR IMPLIED SERVICE REQUESTS ────────────────────────────────
+
   const serviceMatches = detectServiceIntent(norm);
   if (serviceMatches) {
     const isHindi = lang === "hinglish" || lang === "hindi";
@@ -339,195 +658,7 @@ export function analyzeMessageAndContext(
     };
   }
 
-  // 5. Questions about Skill-Link platform
-  if (norm.includes("what is skill-link") || norm.includes("what is skill link") || norm.includes("skill-link kya hai") || norm.includes("skill link kya hai")) {
-    return {
-      intent: "skill_link_question",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: lang === "hinglish"
-        ? "Skill-Link ek AI-powered service marketplace hai jo clients ko verified local skilled workers (plumbers, electricians, mechanics, technicians) se connect karta hai. Aap bina kisi complex form ke seedhe apni problem bata sakte hain, aur main aapko suitable workers se connect kar dungi."
-        : "Skill-Link is an AI-powered service marketplace that connects clients with skilled local workers. You can simply describe what you need, and Lexi will help identify the right service and guide you through the process."
-    };
-  }
-
-  if (norm.includes("how does skill-link work") || norm.includes("how it works") || norm.includes("kaise kaam karta")) {
-    return {
-      intent: "skill_link_question",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "Skill-Link works in simple steps: 1) You describe your issue naturally. 2) Lexi identifies the required service. 3) Skill-Link matches available verified workers. 4) You review profiles, prices, and confirm. 5) The worker completes the job and you can rate them."
-    };
-  }
-
-  if (norm.includes("future of skill-link") || norm.includes("future vision") || norm.includes("roadmap")) {
-    return {
-      intent: "skill_link_question",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "Skill-Link's long-term vision is to become a complete AI-powered service ecosystem. Planned future capabilities include advanced AI worker matching, voice interaction, multilingual support, real-time worker tracking, predictive maintenance, and regional expansion."
-    };
-  }
-
-  // 6. General Questions (e.g. "what is javascript", "what is java", "explain python") -> Standard ChatGPT-like reply without mentioning Skill-Link!
-  if (norm.includes("what is javascript") || norm.includes("what is js")) {
-    return {
-      intent: "general_question",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "JavaScript is a lightweight, interpreted programming language widely used to create interactive and dynamic web applications across both client-side and server-side environments."
-    };
-  }
-
-  if (norm.includes("what is java") && !norm.includes("javascript")) {
-    return {
-      intent: "general_question",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "Java is a popular, class-based, object-oriented programming language designed to have as few implementation dependencies as possible, following the 'write once, run anywhere' philosophy."
-    };
-  }
-
-  if (norm.includes("what is python")) {
-    return {
-      intent: "general_question",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      missing_information: [],
-      response: "Python is a high-level, interpreted programming language renowned for its clear syntax, readability, and versatile ecosystem in web development, data science, and artificial intelligence."
-    };
-  }
-
-  // 7. Conversational checks: "kaise ho", "how are you", "hi", "tell me a joke", "i'm bored", "my brother is an electrician"
-  if (norm.includes("kaise ho") || norm.includes("kya haal")) {
-    return {
-      intent: "conversation",
-      language: "hinglish",
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "Main theek hoon. Aap batao, kaise help kar sakta hoon?"
-    };
-  }
-
-  if (norm === "hi" || norm === "hello" || norm === "hey" || norm === "namaste") {
-    return {
-      intent: "conversation",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: lang === "hinglish" ? "Hey! Aap batao, kaise help kar sakta hoon?" : "Hey! How can I help you today?"
-    };
-  }
-
-  if (norm.includes("how are you")) {
-    return {
-      intent: "conversation",
-      language: "english",
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "I'm doing great! What are you up to today?"
-    };
-  }
-
-  if (norm.includes("joke") || norm.includes("chutkula")) {
-    return {
-      intent: "conversation",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "Why did the developer go broke? Because he used up all his cache!"
-    };
-  }
-
-  if (norm.includes("bored") || norm.includes("bore ho")) {
-    return {
-      intent: "conversation",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: "Want to chat, hear a quick fact, or talk about something interesting?"
-    };
-  }
-
-  // 8. Casual mention of someone's profession (NOT a booking)
-  if ((norm.includes("brother") || norm.includes("friend") || norm.includes("dost") || norm.includes("bhai")) &&
-      (norm.includes("mechanic") || norm.includes("plumber") || norm.includes("electrician") || norm.includes("engineer"))) {
-    return {
-      intent: "conversation",
-      language: lang,
-      service_category: null,
-      problem_description: null,
-      urgency: "normal",
-      location: null,
-      location_required: false,
-      booking_requested: false,
-      missing_information: [],
-      response: lang === "hinglish"
-        ? "Badiya! Skilled professionals ka field mein hona bahut zaroori hota hai. Aur batao, kya chal raha hai?"
-        : "That's great! Having skilled professionals in the family or friend circle is always awesome. What are you up to today?"
-    };
-  }
-
-  // 9. Informational: "what does a plumber do"
+  // 8. Informational: "what does a plumber do"
   if (norm.includes("what does a plumber do") || norm.includes("plumber kya karta hai")) {
     return {
       intent: "general_question",

@@ -159,11 +159,56 @@ async function callOpenRouterAI(messages = [], userContext = {}) {
 }
 
 async function handleDeterministicFallback(query = "", userContext = {}) {
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().trim();
 
-  if (q.includes("kaise ho") || q.includes("kya haal")) {
-    return { reply: "Main theek hoon. Aap batao, kaise help kar sakta hoon?", provider: "Deterministic Engine" };
+  // 1. Natural Hinglish check-ins ("Mai bhi thik hu", "Sab badhiya", "Great here")
+  if (
+    q.includes("mai bhi thik") ||
+    q.includes("mai bhi theek") ||
+    q.includes("main bhi theek") ||
+    q.includes("main bhi thik") ||
+    q.includes("hum bhi theek") ||
+    q.includes("sab badhiya") ||
+    q.includes("sab theek") ||
+    q.includes("sab mast") ||
+    q.includes("theek hu") ||
+    q.includes("thik hu") ||
+    q.includes("badhiya hu") ||
+    q.includes("i am good") ||
+    q.includes("im good") ||
+    q.includes("doing well") ||
+    q.includes("all good") ||
+    q === "badhiya" ||
+    q === "mast" ||
+    q === "thik" ||
+    q === "theek" ||
+    q === "fine" ||
+    q === "good"
+  ) {
+    return {
+      reply: "Sunkar accha laga! Bataiye, aaj main aapki kya madad kar sakti hoon?",
+      provider: "Skill-Link Intelligence"
+    };
   }
+
+  // 2. Greetings & Status inquiries
+  if (q.includes("kaise ho") || q.includes("kya haal") || q.includes("kaisa hai")) {
+    return { reply: "Main theek hoon. Aap batao, kaise help kar sakta hoon?", provider: "Skill-Link Intelligence" };
+  }
+  if (q === "hi" || q === "hello" || q === "hey" || q === "namaste") {
+    return { reply: "Hey! Kaise help kar sakta hoon?", provider: "Skill-Link Intelligence" };
+  }
+  if (q.includes("how are you")) {
+    return { reply: "I'm doing great, thank you! How can I help you today?", provider: "Skill-Link Intelligence" };
+  }
+  if (q.includes("aur batao") || q.includes("kya chal raha") || q.includes("whats up") || q === "sup") {
+    return { reply: "Bas sab badhiya! Aap batao, aaj koi kaam ya sawaal hai?", provider: "Skill-Link Intelligence" };
+  }
+  if (q.includes("thank") || q.includes("shukriya") || q.includes("dhanyawad")) {
+    return { reply: "Aapka swagat hai! Kisi aur cheez mein madad chahiye toh zaroor batayein.", provider: "Skill-Link Intelligence" };
+  }
+
+  // 3. Service inquiries
   if (q.includes("car") || q.includes("breakdown") || q.includes("mechanic") || q.includes("gadi")) {
     if (q.includes("chandigarh") || q.includes("delhi") || q.includes("sector") || userContext.location) {
       const loc = userContext.location || "Chandigarh";
@@ -172,12 +217,13 @@ async function handleDeterministicFallback(query = "", userContext = {}) {
         reply: `Okay. ${loc} mein mechanic service ke liye verified workers check karta hoon.`,
         toolCalled: "searchWorkers",
         toolResult: toolOutput,
-        provider: "Deterministic Engine + Tool Dispatch"
+        provider: "Skill-Link Intelligence + Tool Dispatch"
       };
     }
-    return { reply: "Samajh gaya. Aapko mechanic ki help chahiye. Aapki current location kya hai?", provider: "Deterministic Engine" };
+    return { reply: "Samajh gaya. Aapko mechanic ki help chahiye. Aapki current location kya hai?", provider: "Skill-Link Intelligence" };
   }
-  if (q.includes("plumber") || q.includes("leak") || q.includes("pipe") || q.includes("tap")) {
+
+  if (q.includes("plumber") || q.includes("leak") || q.includes("pipe") || q.includes("tap") || q.includes("nal")) {
     if (q.includes("chandigarh") || q.includes("delhi") || userContext.location) {
       const loc = userContext.location || "Chandigarh";
       const toolOutput = await searchWorkersTool.execute({ category: "plumber", location: loc });
@@ -185,12 +231,13 @@ async function handleDeterministicFallback(query = "", userContext = {}) {
         reply: `Sure. ${loc} mein available verified plumbers check karta hoon.`,
         toolCalled: "searchWorkers",
         toolResult: toolOutput,
-        provider: "Deterministic Engine + Tool Dispatch"
+        provider: "Skill-Link Intelligence + Tool Dispatch"
       };
     }
-    return { reply: "Sure. Aapko plumber kis location par chahiye?", provider: "Deterministic Engine" };
+    return { reply: "Sure. Aapko plumber kis location par chahiye?", provider: "Skill-Link Intelligence" };
   }
-  if (q.includes("electrician") || q.includes("short circuit") || q.includes("spark")) {
+
+  if (q.includes("electrician") || q.includes("short circuit") || q.includes("spark") || q.includes("bijli")) {
     if (q.includes("chandigarh") || q.includes("delhi") || userContext.location) {
       const loc = userContext.location || "Chandigarh";
       const toolOutput = await searchWorkersTool.execute({ category: "electrician", location: loc });
@@ -198,16 +245,17 @@ async function handleDeterministicFallback(query = "", userContext = {}) {
         reply: `Samajh gaya. ${loc} mein certified electricians check karta hoon.`,
         toolCalled: "searchWorkers",
         toolResult: toolOutput,
-        provider: "Deterministic Engine + Tool Dispatch"
+        provider: "Skill-Link Intelligence + Tool Dispatch"
       };
     }
-    return { reply: "Samajh gaya. Electrician service ke liye aapki location kya hai?", provider: "Deterministic Engine" };
-  }
-  if (q.includes("javascript")) {
-    return { reply: "JavaScript is a lightweight, interpreted programming language used to create interactive web applications.", provider: "Deterministic Engine" };
+    return { reply: "Samajh gaya. Electrician service ke liye aapki location kya hai?", provider: "Skill-Link Intelligence" };
   }
 
-  return { reply: "Hey! How can I help you today?", provider: "Deterministic Engine" };
+  if (q.includes("what is javascript") || q.includes("what is js")) {
+    return { reply: "JavaScript is a lightweight, interpreted programming language widely used to build interactive websites.", provider: "Skill-Link Intelligence" };
+  }
+
+  return { reply: "Hey! Aap batao, aaj main aapki kya madad kar sakta hoon?", provider: "Skill-Link Intelligence" };
 }
 
 module.exports = { callOpenRouterAI };
