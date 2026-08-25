@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Worker = require("../models/Worker");
 const { calculateWorkerMatchScore } = require("../utils/matching");
 
@@ -85,12 +86,14 @@ async function searchWorkersService(params = {}) {
   const cleanCat = (category || "").toLowerCase();
 
   let pool = SEED_WORKERS;
-  try {
-    const mongoDocs = await Worker.find();
-    if (mongoDocs && mongoDocs.length > 0) {
-      pool = mongoDocs;
-    }
-  } catch (e) {}
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const mongoDocs = await Worker.find();
+      if (mongoDocs && mongoDocs.length > 0) {
+        pool = mongoDocs;
+      }
+    } catch (e) {}
+  }
 
   const filtered = pool.filter(w => {
     return (
@@ -103,7 +106,7 @@ async function searchWorkersService(params = {}) {
   const candidates = filtered.length > 0 ? filtered : pool;
 
   const ranked = candidates.map(w => {
-    const scoreInfo = calculateWorkerMatchScore(w, { isEmergency, userLocation: location });
+    const scoreInfo = calculateWorkerMatchScore(w, { category: cleanCat, isEmergency, location });
     return {
       worker: w,
       matchScore: scoreInfo.matchScore,
@@ -123,10 +126,12 @@ async function searchWorkersService(params = {}) {
 
 async function getWorkerDetailsService(workerId) {
   let worker = SEED_WORKERS.find(w => w.workerId === workerId || w.id === workerId);
-  try {
-    const doc = await Worker.findOne({ workerId });
-    if (doc) worker = doc;
-  } catch (e) {}
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const doc = await Worker.findOne({ workerId });
+      if (doc) worker = doc;
+    } catch (e) {}
+  }
 
   if (!worker) {
     return { success: false, message: `Worker #${workerId} not found.` };
