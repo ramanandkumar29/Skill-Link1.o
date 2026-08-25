@@ -340,14 +340,35 @@ export function getWorkerProfile(workerId: string): WorkerProfile | OnRoadMechan
  * 4. Rating & Completed Jobs
  * 5. Trust score
  */
-export function searchAvailableWorkers(params: {
-  category?: string;
-  serviceId?: string;
-  location?: string;
-  emergency?: boolean;
-  maxResults?: number;
-}): WorkerMatchResult[] {
-  const { category = "plumber", location = "Chandigarh", emergency = false, maxResults = 5 } = params;
+export function searchAvailableWorkers(
+  paramsOrCategory: string | {
+    category?: string;
+    serviceId?: string;
+    location?: string;
+    emergency?: boolean;
+    maxResults?: number;
+  } = "plumber",
+  paramLocation: string = "Chandigarh",
+  paramEmergency: boolean = false,
+  paramMaxResults: number = 5
+): WorkerMatchResult[] {
+  let category = "plumber";
+  let location = "Chandigarh";
+  let emergency = false;
+  let maxResults = 5;
+
+  if (typeof paramsOrCategory === "object" && paramsOrCategory !== null) {
+    category = paramsOrCategory.category || "plumber";
+    location = paramsOrCategory.location || "Chandigarh";
+    emergency = !!paramsOrCategory.emergency;
+    maxResults = paramsOrCategory.maxResults || 5;
+  } else if (typeof paramsOrCategory === "string") {
+    category = paramsOrCategory;
+    location = paramLocation;
+    emergency = paramEmergency;
+    maxResults = paramMaxResults;
+  }
+
   const cleanCat = category.toLowerCase().trim();
 
   // If vehicle / on-road emergency

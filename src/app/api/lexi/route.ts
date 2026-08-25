@@ -62,6 +62,7 @@ export async function POST(req: Request) {
   try {
     const { messages, mode = "voice", temperature = 0.4, currentState } = await req.json();
 
+    const expressBackendUrl = process.env.EXPRESS_BACKEND_URL || "http://localhost:5000";
     const lexiEngineUrl = process.env.LEXI_API_URL || process.env.NEXT_PUBLIC_LEXI_API_URL;
     const groqKey = process.env.GROQ_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
@@ -75,7 +76,47 @@ export async function POST(req: Request) {
     let structuredOutput: AIStructuredUnderstanding | null = null;
     let usedProvider = "Skill-Link Semantic Engine";
 
-    // ─── STAGE 1: AI MODEL INFERENCE (IF KEYS CONFIGURED) ──────────────────────
+    // ─── STAGE 1: AI MODEL INFERENCE (IF EXPRESS SERVER / KEYS CONFIGURED) ─────
+
+    // 0. Try Express Backend on Port 5000 (RAG + OpenRouter + Tool Calling)
+    if (expressBackendUrl) {
+      try {
+        const expressRes = await fetch(`${expressBackendUrl}/api/lexi/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages, currentState })
+        });
+        if (expressRes.ok) {
+          const data = await expressRes.json();
+          if (data.success && data.reply) {
+            // Process into UI action format
+            const decisionResult: AIActionResult = processUserUtterance(userMessage, messages || [], currentState);
+            decisionResult.speechText = data.reply;
+
+            // If Express executed searchWorkers tool, enrich payload
+            if (data.toolCalled === "searchWorkers" && data.toolResult?.workers) {
+              decisionResult.actionType = "SHOW_WORKERS";
+              decisionResult.payload = {
+                ...decisionResult.payload,
+                workers: data.toolResult.workers
+              };
+            }
+
+            return NextResponse.json({
+              success: true,
+              reply: data.reply,
+              actionResult: decisionResult,
+              toolCalled: data.toolCalled,
+              toolResult: data.toolResult,
+              provider: data.provider || "Skill-Link Express AI + RAG",
+              latencyMs: Date.now() - startTime,
+            });
+          }
+        }
+      } catch (e) {
+        // Express not ready, seamlessly cascade
+      }
+    }
 
     // 1. Try Lexi AI Local/Remote FastAPI Engine
     if (lexiEngineUrl && !structuredOutput) {

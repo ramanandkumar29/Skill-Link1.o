@@ -23,7 +23,12 @@ export type AIIntentType =
   | "cancellation_request"
   | "worker_information"
   | "complaint"
-  | "payment_question";
+  | "payment_question"
+  | "GENERAL_CONVERSATION"
+  | "SERVICE_INFORMATION"
+  | "WORKER_SELECTED"
+  | "BOOKING_CONFIRMATION"
+  | "CANCEL_BOOKING";
 
 export type AIActionType =
   | "GENERAL_REPLY"
@@ -46,7 +51,7 @@ export interface AIStructuredUnderstanding {
   urgency: "normal" | "urgent" | "emergency";
   location: string | null;
   location_required: boolean;
-  booking_requested: boolean;
+  booking_requested?: boolean;
   missing_information: string[];
   response: string;
 }

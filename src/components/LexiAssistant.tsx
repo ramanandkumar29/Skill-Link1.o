@@ -380,7 +380,7 @@ export default function LexiAssistant() {
     // Fallback to local decision engine if needed
     if (!replyText || !actionResult) {
       const decision = processUserUtterance(query, updatedHistory, {
-        selectedLocation: userLocation
+        location: userLocation
       });
       replyText = decision.speechText;
       thoughtText = decision.thought || "";
