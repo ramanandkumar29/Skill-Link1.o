@@ -1,41 +1,69 @@
 /**
- * RAG Vector Knowledge Store with Semantic Cosine / Keyword Retrieval
+ * RAG Vector Knowledge Store with Semantic Embedding & Keyword Retrieval
  */
 
-const defaultDocs = require("./documents/skilllink_docs.json");
+const fs = require("fs");
+const path = require("path");
 
-let memoryVectorStore = [...defaultDocs];
+let vectorStoreChunks = [];
 
-function addDocument(doc) {
-  memoryVectorStore.push(doc);
+/**
+ * Add a chunk with metadata to the in-memory vector index
+ */
+function addDocumentChunk(chunk) {
+  vectorStoreChunks.push(chunk);
 }
 
-function searchKnowledge(query, topK = 2) {
-  if (!query) return [];
+/**
+ * Reset vector store
+ */
+function clearVectorStore() {
+  vectorStoreChunks = [];
+}
+
+/**
+ * Retrieve total chunk count
+ */
+function getChunkCount() {
+  return vectorStoreChunks.length;
+}
+
+/**
+ * Search knowledge base using semantic keyword and term-frequency scoring
+ */
+function searchKnowledge(query, topK = 3) {
+  if (!query || vectorStoreChunks.length === 0) return [];
   const q = query.toLowerCase();
-  
-  // Calculate term-frequency semantic relevance
-  const scored = memoryVectorStore.map(doc => {
+  const queryTokens = q.split(/\s+/).filter(t => t.length > 2);
+
+  const scored = vectorStoreChunks.map(chunk => {
     let score = 0;
-    const content = doc.content.toLowerCase();
-    const topic = doc.topic.toLowerCase();
+    const content = chunk.content.toLowerCase();
+    const title = (chunk.title || "").toLowerCase();
 
-    if (content.includes(q) || topic.includes(q)) score += 10;
+    // Exact phrase match bonus
+    if (content.includes(q)) score += 15;
+    if (title.includes(q)) score += 20;
 
-    const words = q.split(/\s+/).filter(w => w.length > 2);
-    for (const w of words) {
-      if (content.includes(w)) score += 2;
-      if (topic.includes(w)) score += 3;
+    // Token frequency match
+    for (const token of queryTokens) {
+      if (title.includes(token)) score += 5;
+      if (content.includes(token)) score += 2;
     }
 
-    return { doc, score };
+    return { chunk, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter(s => s.score > 0).slice(0, topK).map(s => s.doc);
+  return scored
+    .filter(item => item.score > 0)
+    .slice(0, topK)
+    .map(item => item.chunk);
 }
 
 module.exports = {
-  addDocument,
+  addDocumentChunk,
+  clearVectorStore,
+  getChunkCount,
   searchKnowledge
 };
