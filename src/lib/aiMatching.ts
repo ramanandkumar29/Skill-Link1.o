@@ -1,4 +1,5 @@
 import { WorkerProfile, ServiceCategory } from "./seedData";
+import { calculateHaversineDistance } from "./geo";
 
 export interface AIMatchResult {
   worker: WorkerProfile;
@@ -65,9 +66,15 @@ export function calculateAIMatch(
   if (worker.certifications && worker.certifications.length > 0) coopScore += 5;
   coopScore = Math.min(100, coopScore);
 
-  // 4. Proximity calculation (Simulated realistic distance based on worker id hash)
-  const distanceKm = Number((1.1 + ((worker.id.charCodeAt(0) * 7) % 35) / 10).toFixed(1));
-  const proximityScore = Math.max(40, Math.round(100 - distanceKm * 12));
+  // 4. Geodesic Proximity calculation (Uses real Haversine formula when coordinates are available)
+  let distanceKm: number;
+  if (userLat && userLng && worker.latitude && worker.longitude) {
+    distanceKm = calculateHaversineDistance(userLat, userLng, worker.latitude, worker.longitude);
+  } else {
+    // Graceful fallback to deterministic regional hash
+    distanceKm = Number((1.1 + ((worker.id.charCodeAt(0) * 7) % 35) / 10).toFixed(1));
+  }
+  const proximityScore = Math.max(20, Math.min(100, Math.round(100 - distanceKm * 8)));
 
   // 5. Availability & Workload balance
   const availabilityScore = worker.isAvailable ? 95 : 30;
@@ -97,13 +104,13 @@ export function calculateAIMatch(
   // Natural Language Explainable Reason
   let reason = "";
   if (fairOpportunityScore >= 90) {
-    reason = `Cooperative Fair Rotation: Verified ${worker.occupation} with ${worker.experience} exp, recommended for balanced work distribution.`;
+    reason = `Cooperative Fair Rotation: Verified ${worker.occupation} with ${worker.experience} exp, recommended for balanced work distribution (~${distanceKm} km away).`;
   } else if (worker.badge === "Legendary") {
     reason = `Top-rated ${worker.occupation} with ${worker.experience} exp, verified by ${worker.cooperativeSociety?.split(" ")[0] || "Cooperative"}, ~${distanceKm} km away.`;
   } else if (worker.certifications && worker.certifications.length > 0) {
-    reason = `Certified in ${worker.certifications[0].name.split("(")[0].trim()}, instant availability in ${worker.location}.`;
+    reason = `Certified in ${worker.certifications[0].name.split("(")[0].trim()}, ~${distanceKm} km away in ${worker.location}.`;
   } else {
-    reason = `Verified cooperative worker with ${worker.rating.toFixed(1)}★ rating across ${worker.jobsCompleted}+ successful jobs.`;
+    reason = `Verified cooperative worker with ${worker.rating.toFixed(1)}★ rating across ${worker.jobsCompleted}+ successful jobs (~${distanceKm} km away).`;
   }
 
   return {
@@ -128,9 +135,11 @@ export function calculateAIMatch(
 export function rankWorkersWithAI(
   workers: WorkerProfile[],
   query: string = "",
-  preferredCategory?: string
+  preferredCategory?: string,
+  userLat?: number,
+  userLng?: number
 ): AIMatchResult[] {
   return workers
-    .map((w) => calculateAIMatch(w, query, preferredCategory))
+    .map((w) => calculateAIMatch(w, query, preferredCategory, userLat, userLng))
     .sort((a, b) => b.matchScore - a.matchScore);
 }

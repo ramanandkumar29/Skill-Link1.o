@@ -93,6 +93,40 @@ export default function ChatMessage({
 
       {/* Message Content Container */}
       <div className={`flex flex-col space-y-2 max-w-[85%] sm:max-w-[75%] ${isUser ? "items-end" : "items-start"}`}>
+        {/* Safety Warning Card */}
+        {message.safetyWarning && (
+          <div className="w-full mb-1 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 font-semibold flex items-start gap-2 shadow-sm animate-pulse">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div>{message.safetyWarning}</div>
+          </div>
+        )}
+
+        {/* Structured AI Analysis Badge */}
+        {message.structuredAnalysis && (
+          <div className="w-full mb-1 p-2.5 bg-blue-50/90 border border-blue-200 rounded-xl text-xs text-slate-800 shadow-sm space-y-1">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 font-bold">
+              <span className="text-blue-900 flex items-center gap-1">
+                <span>🛠️</span>
+                <span>{message.structuredAnalysis.service}: {message.structuredAnalysis.problem_type}</span>
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-md font-extrabold text-[10px] uppercase ${
+                  message.structuredAnalysis.urgency.includes("EMERGENCY")
+                    ? "bg-rose-600 text-white animate-pulse"
+                    : message.structuredAnalysis.urgency === "HIGH"
+                    ? "bg-amber-100 text-amber-900 border border-amber-300"
+                    : "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                }`}
+              >
+                {message.structuredAnalysis.urgency.replace("_", " ")}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-600">
+              Recommended: <strong>{message.structuredAnalysis.recommended_action}</strong>
+            </div>
+          </div>
+        )}
+
         {/* Bubble */}
         <div
           className={`px-4 py-3 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-sm ${
@@ -105,19 +139,67 @@ export default function ChatMessage({
         >
           <div className="whitespace-pre-wrap">{message.content}</div>
 
-          {/* Voice Speak Audio Button on Assistant Message */}
-          {!isUser && !message.isError && message.content && (
-            <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+          {/* Voice Speak Audio Button & Feedback on Assistant Message */}
+          {!isUser && !message.isError && (
+            <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] text-slate-400 font-medium">{message.timestamp}</span>
-              <button
-                type="button"
-                onClick={() => lexiVoice.speak(message.content)}
-                className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md transition-colors"
-                title="Listen to Lexi voice audio"
-              >
-                <Volume2 className="w-3 h-3" />
-                <span>Listen</span>
-              </button>
+
+              <div className="flex items-center gap-3">
+                {/* Helpful Feedback Buttons */}
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <span>Helpful?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetch("/api/lexi/feedback", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          messageId: message.id,
+                          response: message.content,
+                          feedback: "helpful",
+                        }),
+                      }).catch(() => {});
+                      alert("Thanks for your feedback! 👍");
+                    }}
+                    className="hover:scale-125 transition-transform"
+                    title="Helpful"
+                  >
+                    👍
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetch("/api/lexi/feedback", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          messageId: message.id,
+                          response: message.content,
+                          feedback: "not_helpful",
+                        }),
+                      }).catch(() => {});
+                      alert("Feedback recorded. We will improve LEXI's accuracy! 👎");
+                    }}
+                    className="hover:scale-125 transition-transform"
+                    title="Not Helpful"
+                  >
+                    👎
+                  </button>
+                </div>
+
+                {message.content && (
+                  <button
+                    type="button"
+                    onClick={() => lexiVoice.speak(message.content)}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md transition-colors"
+                    title="Listen to Lexi voice audio"
+                  >
+                    <Volume2 className="w-3 h-3" />
+                    <span>Listen</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -13,6 +13,8 @@ ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'customer';
 ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS latitude NUMERIC(9,6);
+ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS longitude NUMERIC(9,6);
 ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
@@ -42,6 +44,9 @@ ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS bio TEXT;
 ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS skills TEXT[];
+ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS latitude NUMERIC(9,6);
+ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS longitude NUMERIC(9,6);
+ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS last_location_updated_at TIMESTAMPTZ;
 ALTER TABLE IF EXISTS public.workers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 
 -- Services
@@ -63,6 +68,9 @@ ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS service_name TEXT
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS customer_name TEXT;
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS customer_phone TEXT;
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS customer_address TEXT;
+ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS service_latitude NUMERIC(9,6);
+ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS service_longitude NUMERIC(9,6);
+ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS distance_km NUMERIC(5,2);
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS problem_description TEXT;
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS scheduled_date TEXT;
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS scheduled_time TEXT DEFAULT 'Within 45 Mins';
@@ -174,3 +182,125 @@ CREATE POLICY "Participants can update bookings"
     ON public.bookings FOR UPDATE
     TO authenticated, anon
     USING (true);
+
+-- ==============================================================================
+-- 5. NOTIFICATIONS TABLE (NON-DESTRUCTIVE)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'booking_update',
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+    role TEXT DEFAULT 'customer',
+    is_read BOOLEAN DEFAULT false,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON public.notifications(user_id, is_read);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only view their own notifications
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
+CREATE POLICY "Users can view own notifications"
+    ON public.notifications FOR SELECT
+    TO authenticated, anon
+    USING (user_id = auth.uid() OR user_id IS NULL);
+
+-- Policy: Users can update their own notifications (e.g., mark as read)
+DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
+CREATE POLICY "Users can update own notifications"
+    ON public.notifications FOR UPDATE
+    TO authenticated, anon
+    USING (user_id = auth.uid() OR user_id IS NULL)
+    WITH CHECK (user_id = auth.uid() OR user_id IS NULL);
+
+-- Policy: Authenticated users and backend functions can insert notifications
+DROP POLICY IF EXISTS "Anyone can insert notifications" ON public.notifications;
+CREATE POLICY "Anyone can insert notifications"
+    ON public.notifications FOR INSERT
+    TO authenticated, anon
+    WITH CHECK (true);
+
+-- Enable Supabase Realtime for instant live notifications (Idempotent check)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'notifications'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+    END IF;
+END $$;
+
+-- ==============================================================================
+-- 6. PAYMENTS TABLE (NON-DESTRUCTIVE)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+    customer_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    currency TEXT DEFAULT 'INR',
+    payment_status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'processing' | 'successful' | 'failed' | 'refunded'
+    payment_provider TEXT DEFAULT 'razorpay',
+    provider_order_id TEXT,
+    provider_payment_id TEXT,
+    provider_signature TEXT,
+    payment_method TEXT DEFAULT 'upi', -- 'upi' | 'card' | 'netbanking' | 'wallet'
+    is_test_mode BOOLEAN DEFAULT true,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_payments_booking_id ON public.payments(booking_id);
+CREATE INDEX IF NOT EXISTS idx_payments_customer_id ON public.payments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order_id ON public.payments(provider_order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(payment_status);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Customers can only view their own payment transactions
+DROP POLICY IF EXISTS "Customers can view own payments" ON public.payments;
+CREATE POLICY "Customers can view own payments"
+    ON public.payments FOR SELECT
+    TO authenticated, anon
+    USING (customer_id = auth.uid() OR customer_id IS NULL);
+
+-- Policy: Authenticated users/server can insert payments
+DROP POLICY IF EXISTS "Anyone can insert payments" ON public.payments;
+CREATE POLICY "Anyone can insert payments"
+    ON public.payments FOR INSERT
+    TO authenticated, anon
+    WITH CHECK (true);
+
+-- Policy: Server/authenticated user can update payment status
+DROP POLICY IF EXISTS "Participants can update payments" ON public.payments;
+CREATE POLICY "Participants can update payments"
+    ON public.payments FOR UPDATE
+    TO authenticated, anon
+    USING (customer_id = auth.uid() OR customer_id IS NULL);
+
+-- Realtime replication for instant payment status listeners (Idempotent check)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'payments'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.payments;
+    END IF;
+END $$;

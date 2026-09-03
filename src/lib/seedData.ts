@@ -40,6 +40,8 @@ export interface WorkerProfile {
   hourlyRate?: number;
   visitingFee?: number;
   audioSnippetUrl?: string;
+  latitude?: number;
+  longitude?: number;
 
   // ── Cooperative Gig Model Fields (SIH26089) ──
   cooperativeSociety?: string;

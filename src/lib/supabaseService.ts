@@ -12,6 +12,9 @@ export interface DbProfile {
   phone: string | null;
   role: UserRole;
   avatar_url?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -62,6 +65,9 @@ export interface DbBooking {
   customer_name: string;
   customer_phone: string;
   customer_address?: string;
+  service_latitude?: number | null;
+  service_longitude?: number | null;
+  distance_km?: number | null;
   problem_description?: string;
   scheduled_date: string;
   scheduled_time?: string;
@@ -93,6 +99,9 @@ export interface DbWorker {
   avatar_url?: string;
   bio?: string;
   skills?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  last_location_updated_at?: string | null;
   profiles?: DbProfile;
   cooperatives?: DbCooperative;
   created_at?: string;
@@ -298,6 +307,9 @@ export async function createBookingInDb(booking: {
   customerName: string;
   customerPhone: string;
   customerAddress?: string;
+  serviceLatitude?: number | null;
+  serviceLongitude?: number | null;
+  distanceKm?: number | null;
   problemDescription?: string;
   scheduledDate: string;
   scheduledTime?: string;
@@ -313,6 +325,9 @@ export async function createBookingInDb(booking: {
     customer_name: booking.customerName,
     customer_phone: booking.customerPhone,
     customer_address: booking.customerAddress || "Address on file",
+    service_latitude: booking.serviceLatitude ?? null,
+    service_longitude: booking.serviceLongitude ?? null,
+    distance_km: booking.distanceKm ?? null,
     problem_description: booking.problemDescription || booking.notes || "Service inspection requested",
     scheduled_date: booking.scheduledDate,
     scheduled_time: booking.scheduledTime || "ASAP",
@@ -442,5 +457,63 @@ export async function updateBookingStatusInDb(
   } catch (err: any) {
     console.warn("updateBookingStatusInDb exception:", err);
     return { success: false, error: err?.message || "Failed to update booking" };
+  }
+}
+
+/**
+ * Update worker's active location coordinates when they explicitly update location or toggle online.
+ * Respects worker privacy by updating only upon explicit action.
+ */
+export async function updateWorkerLocationInDb(
+  workerId: string,
+  latitude: number,
+  longitude: number
+): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from("workers")
+      .update({
+        latitude,
+        longitude,
+        last_location_updated_at: new Date().toISOString(),
+      })
+      .eq("id", workerId);
+
+    if (error) {
+      console.warn("updateWorkerLocationInDb error:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Failed to update worker location" };
+  }
+}
+
+/**
+ * Update worker online/offline availability in database.
+ */
+export async function updateWorkerAvailabilityInDb(
+  workerId: string,
+  isAvailable: boolean
+): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from("workers")
+      .update({ is_available: isAvailable })
+      .eq("id", workerId);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Failed to update availability" };
   }
 }

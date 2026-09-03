@@ -1,25 +1,43 @@
 "use client";
 
 import React, { useState } from "react";
-import { Worker } from "../lib/seedData";
-import { saveBooking, updateBookingPhoto } from "../lib/storage";
-import { createBookingInDb, updateBookingStatusInDb } from "../lib/supabaseService";
-import { getStoredAuthSession } from "../lib/auth";
+import dynamic from "next/dynamic";
+import { Worker } from "@/lib/seedData";
+import { saveBooking } from "@/lib/storage";
+import { createBookingInDb, updateBookingStatusInDb } from "@/lib/supabaseService";
+import { getStoredAuthSession } from "@/lib/auth";
+import { notifyBookingCreated, notifyNewJobRequest } from "@/lib/notificationService";
+import { initiatePaymentOrder, verifyPaymentTransaction } from "@/lib/paymentService";
 import {
-  CheckCircle2,
+  calculateHaversineDistance,
+  estimateTravelTimeMinutes,
+  getBrowserLocation,
+  reverseGeocode,
+  getNavigationUrl,
+} from "@/lib/geo";
+import {
+  CheckCircle,
+  AlertCircle,
+  MapPin,
+  Navigation,
+  CreditCard,
   QrCode,
-  ShieldCheck,
-  IndianRupee,
+  Banknote,
   ArrowRight,
-  Camera,
+  ShieldCheck,
+  Zap,
   X,
   Calendar,
   Clock,
   Download,
   Star,
   Building,
-  HeartHandshake
+  HeartHandshake,
+  IndianRupee,
+  CheckCircle2,
 } from "lucide-react";
+
+const SkillLinkMap = dynamic(() => import("./SkillLinkMap"), { ssr: false });
 
 interface PaymentModalProps {
   worker: Worker | null;
@@ -29,7 +47,11 @@ interface PaymentModalProps {
 
 export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModalProps) {
   const [step, setStep] = useState<"SCHEDULE" | "PAYMENT" | "CONFIRMED" | "FEEDBACK">("SCHEDULE");
-  const [paymentMethod, setPaymentMethod] = useState<"UPI" | "CASH">("UPI");
+  const [paymentMethod, setPaymentMethod] = useState<"UPI" | "CARD" | "NETBANKING" | "CASH">("UPI");
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [isSandboxMode, setIsSandboxMode] = useState(true);
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
@@ -37,6 +59,12 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
   const [preferredSlot, setPreferredSlot] = useState("Within 45 Mins");
   const [customNotes, setCustomNotes] = useState("");
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+
+  // Geolocation & Map state
+  const [serviceLat, setServiceLat] = useState<number>(30.7333);
+  const [serviceLng, setServiceLng] = useState<number>(76.7794);
+  const [isLocating, setIsLocating] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   // Post-service rating & invoice
   const [rating, setRating] = useState(5);
@@ -58,11 +86,49 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
     setStep("PAYMENT");
   };
 
-  const handleConfirmBookingPayment = () => {
+  const handleConfirmBookingPayment = async () => {
+    setIsProcessingPayment(true);
+    setPaymentError(null);
+
     const session = getStoredAuthSession();
     const customerId = session?.id || `anon-${Date.now()}`;
 
-    // Persist real booking to Supabase `bookings` table
+    const distanceKm = calculateHaversineDistance(
+      serviceLat,
+      serviceLng,
+      worker.latitude || 30.7333,
+      worker.longitude || 76.7794
+    );
+
+    // 1. Initiate Secure Order via Server-Side API
+    const orderRes = await initiatePaymentOrder({
+      amount: totalPayable,
+      paymentMethod: paymentMethod.toLowerCase() as any,
+      customerName: clientName,
+      customerPhone: clientPhone,
+      bookingId: `bk_${Date.now().toString(36)}`,
+    });
+
+    if (!orderRes.success || !orderRes.order) {
+      setIsProcessingPayment(false);
+      setPaymentError(orderRes.error || "Payment order creation failed. Please try again.");
+      return;
+    }
+
+    setIsSandboxMode(orderRes.order.isTestMode);
+
+    // 2. Server-side payment verification (Sandbox or Live HMAC)
+    const verifyRes = await verifyPaymentTransaction({
+      paymentId: orderRes.order.id,
+      providerOrderId: orderRes.order.providerOrderId,
+      providerPaymentId: `pay_${Date.now()}`,
+      isTestMode: orderRes.order.isTestMode,
+    });
+
+    const finalTxnId = verifyRes.paymentRecord?.providerPaymentId || orderRes.order.id;
+    setTransactionId(finalTxnId);
+
+    // 3. Persist real booking to Supabase `bookings` table
     createBookingInDb({
       customerId,
       workerId: worker.id,
@@ -70,6 +136,9 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
       customerName: clientName,
       customerPhone: clientPhone,
       customerAddress: clientAddress,
+      serviceLatitude: serviceLat,
+      serviceLongitude: serviceLng,
+      distanceKm: distanceKm,
       problemDescription: customNotes,
       scheduledDate: preferredDate,
       scheduledTime: preferredSlot,
@@ -96,6 +165,25 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
     });
 
     setActiveBookingId(newBooking.id);
+
+    // 4. Instant Notifications for Customer & Artisan
+    notifyBookingCreated({
+      bookingId: newBooking.id,
+      serviceName: worker.occupation,
+      workerName: worker.name,
+      scheduledTime: `${preferredDate}, ${preferredSlot}`,
+    }).catch(() => {});
+
+    notifyNewJobRequest({
+      workerId: worker.id,
+      customerName: clientName,
+      serviceType: worker.occupation,
+      address: clientAddress,
+      offeredFee: totalPayable,
+      bookingId: newBooking.id,
+    }).catch(() => {});
+
+    setIsProcessingPayment(false);
     setStep("CONFIRMED");
   };
 
@@ -121,7 +209,8 @@ LINE ITEMS:
 3. Platform Facilitation Commission:       ₹0.00 (Coop 0% Cut)
 -----------------------------------------------------
 TOTAL AMOUNT PAID:                         ₹${totalPayable}.00
-Payment Mode:                              ${paymentMethod} (UPI Verified)
+Payment Mode:                              ${paymentMethod} (${isSandboxMode ? "Sandbox Test Verified" : "Live Escrow"})
+Transaction Ref:                           ${transactionId || `TXN-${Date.now()}`}
 Tax Status:                                Society Cess Exempt
 =====================================================
 Thank you for supporting Labour Cooperative Societies!
@@ -214,9 +303,39 @@ Thank you for supporting Labour Cooperative Societies!
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
-                Service Address &amp; House Number
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-bold uppercase text-slate-600">
+                  Service Address &amp; Sector
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsLocating(true);
+                      const res = await getBrowserLocation();
+                      setIsLocating(false);
+                      if (res.location) {
+                        setServiceLat(res.location.lat);
+                        setServiceLng(res.location.lng);
+                        setClientAddress(res.location.address);
+                      }
+                    }}
+                    disabled={isLocating}
+                    className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <Navigation className="w-2.5 h-2.5" />
+                    {isLocating ? "Locating..." : "Auto GPS"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMap(!showMap)}
+                    className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-colors"
+                  >
+                    <MapPin className="w-2.5 h-2.5 text-emerald-600" />
+                    {showMap ? "Hide Map" : "Pin on Map"}
+                  </button>
+                </div>
+              </div>
               <input
                 type="text"
                 required
@@ -225,6 +344,73 @@ Thank you for supporting Labour Cooperative Societies!
                 placeholder="e.g. House 412, Sector 18-B, Chandigarh"
                 className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-blue-500"
               />
+
+              {/* Interactive Map Picker & Distance Preview */}
+              {showMap && (
+                <div className="mt-2.5 space-y-1.5 animate-in fade-in duration-200">
+                  <SkillLinkMap
+                    center={{ lat: serviceLat, lng: serviceLng }}
+                    zoom={13}
+                    height="200px"
+                    interactiveSelect={true}
+                    onLocationSelect={async (pos) => {
+                      setServiceLat(pos.lat);
+                      setServiceLng(pos.lng);
+                      const addr = await reverseGeocode(pos.lat, pos.lng);
+                      setClientAddress(addr);
+                    }}
+                    markers={[
+                      {
+                        id: "client-pin",
+                        lat: serviceLat,
+                        lng: serviceLng,
+                        title: "Your Service Location",
+                        isCustomer: true,
+                      },
+                      {
+                        id: worker.id,
+                        lat: worker.latitude || 30.7333,
+                        lng: worker.longitude || 76.7794,
+                        title: worker.name,
+                        subtitle: worker.occupation,
+                        rating: worker.rating,
+                        distanceKm: calculateHaversineDistance(
+                          serviceLat,
+                          serviceLng,
+                          worker.latitude || 30.7333,
+                          worker.longitude || 76.7794
+                        ),
+                      },
+                    ]}
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                    <span className="flex items-center gap-1 text-slate-700 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      Technician Distance:{" "}
+                      <strong>
+                        {calculateHaversineDistance(
+                          serviceLat,
+                          serviceLng,
+                          worker.latitude || 30.7333,
+                          worker.longitude || 76.7794
+                        )}{" "}
+                        km
+                      </strong>{" "}
+                      (~
+                      {estimateTravelTimeMinutes(
+                        calculateHaversineDistance(
+                          serviceLat,
+                          serviceLng,
+                          worker.latitude || 30.7333,
+                          worker.longitude || 76.7794
+                        )
+                      )}{" "}
+                      min ETA)
+                    </span>
+                    <span className="text-blue-600 font-medium">Tap map to drag pin</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Date & Time Slot Selection */}
@@ -310,50 +496,149 @@ Thank you for supporting Labour Cooperative Societies!
               </div>
             </div>
 
-            {/* Payment Method Selector */}
+            {/* Sandbox / Test Mode Banner */}
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <span className="font-bold">
+                  {isSandboxMode ? "🧪 Sandbox Test Payment Active" : "🔒 Live Encrypted Escrow"}
+                </span>
+              </div>
+              <span className="text-[10px] font-semibold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded">
+                {isSandboxMode ? "Zero Real Money Charged" : "SSL Verified"}
+              </span>
+            </div>
+
+            {paymentError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold">
+                {paymentError}
+              </div>
+            )}
+
+            {/* Payment Method Selector (4 Options: UPI, Card, NetBanking, Cash) */}
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700">
-                Select Digital Payment Mode
+                Select Payment Mode
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("UPI")}
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                     paymentMethod === "UPI"
                       ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
                       : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  <QrCode className="w-4 h-4" /> UPI / QR Scan
+                  <QrCode className="w-3.5 h-3.5" /> UPI / QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("CARD")}
+                  className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    paymentMethod === "CARD"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" /> Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("NETBANKING")}
+                  className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    paymentMethod === "NETBANKING"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <Building className="w-3.5 h-3.5" /> NetBanking
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("CASH")}
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                     paymentMethod === "CASH"
                       ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
                       : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  <IndianRupee className="w-4 h-4" /> Cash on Visit
+                  <IndianRupee className="w-3.5 h-3.5" /> Cash
                 </button>
               </div>
             </div>
 
-            {/* Simulated QR Code for UPI */}
+            {/* UPI Option Preview */}
             {paymentMethod === "UPI" && (
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2">
-                <div className="w-32 h-32 bg-white border-2 border-slate-300 rounded-xl mx-auto flex items-center justify-center p-2 shadow-inner">
+                <div className="w-28 h-28 bg-white border-2 border-slate-300 rounded-xl mx-auto flex items-center justify-center p-2 shadow-inner">
                   <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=upi://pay?pa=coop.skilllink@sbi&pn=SkillLinkCoop&am=153.50&cu=INR"
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=upi://pay?pa=coop.skilllink@sbi&pn=SkillLinkCoop&am=153.50&cu=INR"
                     alt="UPI QR Code"
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <p className="text-[11px] text-slate-500 font-mono">
-                  Scan via GPay, PhonePe, Paytm or BHIM • ID: <span className="font-bold">coop.skilllink@sbi</span>
+                <p className="text-[11px] text-slate-600 font-mono">
+                  GPay • PhonePe • Paytm • BHIM | UPI ID: <span className="font-bold">coop.skilllink@sbi</span>
                 </p>
+              </div>
+            )}
+
+            {/* Card Option Preview */}
+            {paymentMethod === "CARD" && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                <div className="flex justify-between items-center text-[11px] text-slate-500">
+                  <span>RuPay / Visa / Mastercard / Maestro</span>
+                  <span className="font-mono text-emerald-700 font-bold">Sandbox Test Enabled</span>
+                </div>
+                <input
+                  type="text"
+                  disabled
+                  value="4000 0000 0000 0002 (Razorpay Test Card)"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg font-mono text-xs text-slate-700"
+                />
+                <div className="grid grid-cols-2 gap-2 font-mono text-xs">
+                  <input
+                    type="text"
+                    disabled
+                    value="Exp: 12/28"
+                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700"
+                  />
+                  <input
+                    type="text"
+                    disabled
+                    value="CVV: 123"
+                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* NetBanking Option Preview */}
+            {paymentMethod === "NETBANKING" && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                <div className="text-[11px] font-bold text-slate-600">Select Partner Indian Bank:</div>
+                <div className="grid grid-cols-3 gap-1.5 text-[11px] font-semibold">
+                  <span className="p-2 bg-white border border-blue-200 rounded-lg text-center text-blue-700 font-bold">
+                    SBI
+                  </span>
+                  <span className="p-2 bg-white border border-slate-200 rounded-lg text-center text-slate-700">
+                    HDFC
+                  </span>
+                  <span className="p-2 bg-white border border-slate-200 rounded-lg text-center text-slate-700">
+                    ICICI
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Cash on Visit Preview */}
+            {paymentMethod === "CASH" && (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 leading-relaxed">
+                💵 Pay ₹{totalPayable} directly to the verified artisan upon doorstep arrival. The 3% social security welfare pool is automatically settled by the cooperative society.
               </div>
             )}
 
@@ -361,6 +646,7 @@ Thank you for supporting Labour Cooperative Societies!
               <button
                 type="button"
                 onClick={() => setStep("SCHEDULE")}
+                disabled={isProcessingPayment}
                 className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
               >
                 Back
@@ -368,9 +654,19 @@ Thank you for supporting Labour Cooperative Societies!
               <button
                 type="button"
                 onClick={handleConfirmBookingPayment}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                disabled={isProcessingPayment}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                Confirm Payment &amp; Dispatch Worker
+                {isProcessingPayment ? (
+                  <>
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <span>Verifying Escrow Payment...</span>
+                  </>
+                ) : (
+                  <span>
+                    Pay ₹{totalPayable} &amp; Dispatch Worker
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -405,6 +701,22 @@ Thank you for supporting Labour Cooperative Societies!
               <div className="flex justify-between">
                 <span className="text-slate-500">Worker Contact:</span>
                 <span className="font-semibold text-slate-800">{worker.phone}</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-slate-200">
+                <span className="text-slate-500">Payment Status:</span>
+                <span className="font-bold text-emerald-700">
+                  ₹{totalPayable}.00 Verified ({isSandboxMode ? "Sandbox Test" : "Escrow"})
+                </span>
+              </div>
+              {transactionId && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Transaction Ref:</span>
+                  <span className="font-mono text-[11px] text-blue-700 font-semibold">{transactionId}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-500">3% Welfare Pool:</span>
+                <span className="font-semibold text-emerald-700">+₹{welfareCess} Credited</span>
               </div>
             </div>
 

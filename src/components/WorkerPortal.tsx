@@ -1,10 +1,28 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { WorkerProfile, INITIAL_WORKERS } from "@/lib/seedData";
-import { updateBookingStatusInDb, fetchWorkerBookingsFromDb } from "@/lib/supabaseService";
+import {
+  updateBookingStatusInDb,
+  fetchWorkerBookingsFromDb,
+  updateWorkerLocationInDb,
+  updateWorkerAvailabilityInDb,
+} from "@/lib/supabaseService";
 import { subscribeToWorkerDispatches } from "@/lib/supabaseRealtime";
 import { getStoredAuthSession } from "@/lib/auth";
+import {
+  getBrowserLocation,
+  obfuscateCoordinates,
+  getNavigationUrl,
+} from "@/lib/geo";
+import {
+  notifyWorkerEnRoute,
+  notifyWorkerArrived,
+  notifyServiceCompleted,
+} from "@/lib/notificationService";
+
+const SkillLinkMap = dynamic(() => import("./SkillLinkMap"), { ssr: false });
 import {
   ShieldCheck,
   CheckCircle2,
@@ -51,6 +69,39 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
   // Use first verified worker Ramanand Sharma as active worker if none passed
   const [worker, setWorker] = useState<WorkerProfile>(initialWorker || INITIAL_WORKERS[0]);
   const [isOnline, setIsOnline] = useState<boolean>(worker.isAvailable ?? true);
+  const [workerLocation, setWorkerLocation] = useState<{
+    lat: number;
+    lng: number;
+    address: string;
+  }>({
+    lat: worker.latitude || 30.7333,
+    lng: worker.longitude || 76.7794,
+    address: worker.location || "Sector 17, Chandigarh",
+  });
+  const [showRadarMap, setShowRadarMap] = useState<boolean>(false);
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState<boolean>(false);
+
+  const handleToggleOnline = async () => {
+    if (!isOnline) {
+      setIsOnline(true);
+      updateWorkerAvailabilityInDb(worker.id, true).catch(() => {});
+      setIsUpdatingLocation(true);
+      const res = await getBrowserLocation();
+      setIsUpdatingLocation(false);
+      if (res.location) {
+        const obf = obfuscateCoordinates(res.location.lat, res.location.lng);
+        setWorkerLocation({
+          lat: obf.lat,
+          lng: obf.lng,
+          address: res.location.address,
+        });
+        updateWorkerLocationInDb(worker.id, obf.lat, obf.lng).catch(() => {});
+      }
+    } else {
+      setIsOnline(false);
+      updateWorkerAvailabilityInDb(worker.id, false).catch(() => {});
+    }
+  };
 
   // Incoming Job Stream (Simulated real-time dispatch queue)
   const [incomingRequests, setIncomingRequests] = useState<IncomingJobRequest[]>([
@@ -196,6 +247,13 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
       partsAmount: 0,
     });
     setIncomingRequests((prev) => prev.filter((r) => r.id !== req.id));
+
+    // Instant notification: Worker is en route
+    notifyWorkerEnRoute({
+      bookingId: req.id,
+      workerName: worker.name,
+      distanceKm: req.distanceKm,
+    }).catch(() => {});
   };
 
   const handleDeclineJob = (reqId: string) => {
@@ -209,12 +267,27 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
     if (activeJob.status === "EN_ROUTE") {
       updateBookingStatusInDb(activeJob.id, "in_progress").catch(() => {});
       setActiveJob({ ...activeJob, status: "IN_PROGRESS" });
+
+      // Instant notification: Worker has arrived at customer doorstep
+      notifyWorkerArrived({
+        bookingId: activeJob.id,
+        workerName: worker.name,
+      }).catch(() => {});
     } else if (activeJob.status === "IN_PROGRESS") {
       const totalJobEarnings = activeJob.fee;
       updateBookingStatusInDb(activeJob.id, "completed", { finalAmount: totalJobEarnings }).catch(() => {});
       setTodayGross((prev) => prev + totalJobEarnings);
       setCompletedJobsCount((prev) => prev + 1);
       setActiveJob({ ...activeJob, status: "COMPLETED" });
+
+      // Instant notification: Service completed & 3% welfare credited to artisan passbook
+      notifyServiceCompleted({
+        bookingId: activeJob.id,
+        workerId: worker.id,
+        workerName: worker.name,
+        finalAmount: totalJobEarnings,
+      }).catch(() => {});
+
       setTimeout(() => {
         setActiveJob(null);
       }, 3500);
@@ -299,7 +372,8 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
             </div>
           </div>
           <button
-            onClick={() => setIsOnline(!isOnline)}
+            onClick={handleToggleOnline}
+            disabled={isUpdatingLocation}
             className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm flex items-center gap-2 ${
               isOnline
                 ? "bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -307,10 +381,87 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-white" : "bg-slate-500"}`} />
-            <span>{isOnline ? "Go Offline" : "Go Online"}</span>
+            <span>
+              {isUpdatingLocation
+                ? "Updating GPS..."
+                : isOnline
+                ? "Go Offline"
+                : "Go Online"}
+            </span>
           </button>
         </div>
       </div>
+
+      {/* Geolocation & Privacy Shield Banner */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="font-semibold text-slate-700">
+            Active Working Sector: <strong>{workerLocation.address}</strong>
+          </span>
+          <span className="text-[10px] text-slate-400 font-mono">
+            ({workerLocation.lat.toFixed(2)}°N, {workerLocation.lng.toFixed(2)}°E)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            Doorstep Privacy Shield Active (~1.1 km radius)
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setShowRadarMap(!showRadarMap)}
+            className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors"
+          >
+            <MapPin className="w-3 h-3 text-blue-600" />
+            <span>{showRadarMap ? "Hide Sector Radar" : "Open Sector Radar Map"}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Sector Radar Map Display */}
+      {showRadarMap && (
+        <div className="space-y-2 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-blue-600" />
+              Live Sector Radar: Incoming Customer Requests &amp; Distance
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">
+              Click any pin to inspect customer problem or get driving directions
+            </span>
+          </div>
+          <SkillLinkMap
+            center={{ lat: workerLocation.lat, lng: workerLocation.lng }}
+            zoom={13}
+            height="260px"
+            markers={[
+              {
+                id: "worker-self",
+                lat: workerLocation.lat,
+                lng: workerLocation.lng,
+                title: `${worker.name} (Your Base)`,
+                subtitle: worker.occupation,
+                isCustomer: false,
+              },
+              ...incomingRequests.map((req, idx) => ({
+                id: req.id,
+                lat: workerLocation.lat + (idx === 0 ? 0.012 : -0.015),
+                lng: workerLocation.lng + (idx === 0 ? 0.009 : -0.011),
+                title: req.customerName,
+                subtitle: `${req.serviceType} (₹${req.offeredFee})`,
+                distanceKm: req.distanceKm,
+                isCustomer: true,
+              })),
+            ]}
+          />
+        </div>
+      )}
 
       {/* Navigation Sub-Tabs */}
       <div className="flex border-b border-slate-200 gap-2 overflow-x-auto text-xs font-bold pb-2">
@@ -406,13 +557,13 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
                   </a>
 
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activeJob.address)}`}
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(activeJob.address)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
                   >
                     <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Open GPS Map</span>
+                    <span>Turn-by-Turn GPS</span>
                   </a>
                 </div>
               </div>

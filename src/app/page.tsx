@@ -66,6 +66,7 @@ import { useSearchParams } from "next/navigation";
 import { AppSection } from "@/components/Header";
 import { LanguageCode, TRANSLATIONS } from "@/lib/i18n";
 import { rankWorkersWithAI } from "@/lib/aiMatching";
+import { getBrowserLocation, calculateHaversineDistance } from "@/lib/geo";
 
 // Dynamic Imports for High Performance & Reduced JS Bundle Load
 const TrustModal = dynamic(() => import("@/components/TrustModal"), { ssr: false });
@@ -75,6 +76,7 @@ const SahayakVoice = dynamic(() => import("@/components/SahayakVoice"), { ssr: f
 const WorkerPortal = dynamic(() => import("@/components/WorkerPortal"), { ssr: false });
 const CooperativeAdminDashboard = dynamic(() => import("@/components/CooperativeAdminDashboard"), { ssr: false });
 const WorkerWelfareModal = dynamic(() => import("@/components/WorkerWelfareModal"), { ssr: false });
+const SkillLinkMap = dynamic(() => import("@/components/SkillLinkMap"), { ssr: false });
 
 declare global {
   interface Window {
@@ -172,6 +174,7 @@ function MarketplaceContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [isVoiceSearching, setIsVoiceSearching] = useState(false);
+  const [showMarketplaceMap, setShowMarketplaceMap] = useState(false);
 
   // QuickFix SOS State
   const [sosSearching, setSosSearching] = useState(false);
@@ -742,7 +745,13 @@ function MarketplaceContent() {
     setSosConfirmed(true);
   };
 
-  const aiRankedMatches = rankWorkersWithAI(workers, searchQuery, selectedCategory);
+  const aiRankedMatches = rankWorkersWithAI(
+    workers,
+    searchQuery,
+    selectedCategory,
+    gpsStatus.lat || undefined,
+    gpsStatus.lng || undefined
+  );
   const filteredWorkersWithAI = aiRankedMatches.filter(({ worker }) => {
     const matchesCategory =
       selectedCategory === "All" ||
@@ -1475,6 +1484,96 @@ function MarketplaceContent() {
                     );
                   })}
                 </div>
+              </section>
+
+              {/* Location & Sector Discovery Banner */}
+              <section className="space-y-3">
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Your Current Sector</div>
+                      <div className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <span>{gpsStatus.address || "Sector 17, Chandigarh"}</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setGpsStatus((prev) => ({ ...prev, isLoading: true }));
+                            const res = await getBrowserLocation();
+                            if (res.location) {
+                              setGpsStatus({
+                                lat: res.location.lat,
+                                lng: res.location.lng,
+                                address: res.location.address,
+                                isLoading: false,
+                                error: null,
+                              });
+                            } else {
+                              setGpsStatus((prev) => ({ ...prev, isLoading: false, error: res.error || null }));
+                            }
+                          }}
+                          disabled={gpsStatus.isLoading}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                        >
+                          {gpsStatus.isLoading ? "Locating..." : "Auto GPS"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowMarketplaceMap(!showMarketplaceMap)}
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+                  >
+                    <Navigation className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{showMarketplaceMap ? "Hide Map View" : "Explore Nearby Artisans on Map"}</span>
+                  </button>
+                </div>
+
+                {/* Interactive Marketplace Map Radar */}
+                {showMarketplaceMap && (
+                  <div className="space-y-2 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+                      <span className="font-semibold text-slate-700">
+                        Showing verified artisans near your sector • Click any pin to view details or book
+                      </span>
+                      <span className="text-[11px] text-blue-600 font-medium">OpenStreetMap • Leaflet</span>
+                    </div>
+                    <SkillLinkMap
+                      center={{ lat: gpsStatus.lat || 30.7333, lng: gpsStatus.lng || 76.7794 }}
+                      zoom={13}
+                      height="320px"
+                      markers={[
+                        {
+                          id: "user-loc",
+                          lat: gpsStatus.lat || 30.7333,
+                          lng: gpsStatus.lng || 76.7794,
+                          title: "Your Location",
+                          subtitle: gpsStatus.address,
+                          isCustomer: true,
+                        },
+                        ...filteredWorkersWithAI.map(({ worker, matchScore }) => ({
+                          id: worker.id,
+                          lat: worker.latitude || 30.7333 + (worker.id.charCodeAt(0) % 7 - 3) * 0.008,
+                          lng: worker.longitude || 76.7794 + (worker.id.charCodeAt(0) % 5 - 2) * 0.008,
+                          title: worker.name,
+                          subtitle: `${worker.occupation} • ${matchScore}% AI Match`,
+                          rating: worker.rating,
+                          distanceKm: calculateHaversineDistance(
+                            gpsStatus.lat || 30.7333,
+                            gpsStatus.lng || 76.7794,
+                            worker.latitude || 30.7333,
+                            worker.longitude || 76.7794
+                          ),
+                          isCustomer: false,
+                        })),
+                      ]}
+                    />
+                  </div>
+                )}
               </section>
 
               {/* Verified Worker Grid */}

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { AuthSessionUser } from "@/lib/auth";
 import { LanguageCode, LANGUAGES, TRANSLATIONS } from "@/lib/i18n";
+import NotificationBell from "./NotificationBell";
 
 export type AppSection =
   | "MARKETPLACE"
@@ -206,6 +207,12 @@ export default function Header({
               <span>3% Welfare Info</span>
             </button>
           )}
+
+          {/* In-App & Realtime Notification Bell */}
+          <NotificationBell
+            userId={currentUser?.id}
+            userRole={(currentUser?.role as any) || "customer"}
+          />
 
           {/* User Account Dropdown */}
           <div className="relative" ref={dropdownRef}>

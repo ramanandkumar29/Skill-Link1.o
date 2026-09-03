@@ -99,6 +99,15 @@ export interface ChatMessageItem {
   pendingTrade?: string;
   intent?: string;
   isError?: boolean;
+  structuredAnalysis?: {
+    service: string;
+    problem_type: string;
+    urgency: string;
+    confidence: string;
+    recommended_action: string;
+  };
+  safetyWarning?: string;
+  userFeedback?: "helpful" | "not_helpful";
 }
 
 export interface SuggestedPromptItem {

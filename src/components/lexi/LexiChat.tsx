@@ -222,7 +222,7 @@ export default function LexiChat({ onBookWorker, onSelectService }: LexiChatProp
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/lexi/chat", {
+      const response = await fetch("/api/lexi/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -244,6 +244,8 @@ export default function LexiChat({ onBookWorker, onSelectService }: LexiChatProp
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         richPayload: data.richPayload,
         requiresLocation: data.requiresLocation,
+        structuredAnalysis: data.structuredAnalysis,
+        safetyWarning: data.safetyWarning,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
