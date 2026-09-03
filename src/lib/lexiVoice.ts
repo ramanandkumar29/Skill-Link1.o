@@ -24,6 +24,9 @@ class LexiVoiceManager {
   private voiceEnabled: boolean = false; // Auto speech OFF by default
   private activeUtterance: SpeechSynthesisUtterance | null = null;
   private availableVoices: SpeechSynthesisVoice[] = [];
+  private playbackSpeed: number = 1.0;
+  private voiceMode: "auto" | "hindi" | "english" | "hinglish" = "auto";
+  private lastSpokenText: string = "";
 
   constructor() {
     this.initRecognition();
@@ -237,10 +240,19 @@ class LexiVoiceManager {
     this.activeUtterance = utterance;
 
     // Detect Hindi / English
-    const isHindi = explicitLang ? explicitLang.startsWith("hi") : /[\u0900-\u097F]|namaste|hai|hoon|karein|chahiye/i.test(text);
+    const isHindi =
+      this.voiceMode === "hindi" || this.voiceMode === "hinglish"
+        ? true
+        : this.voiceMode === "english"
+        ? false
+        : explicitLang
+        ? explicitLang.startsWith("hi")
+        : /[\u0900-\u097F]|namaste|hai|hoon|karein|chahiye|samajh|paani|bijli/i.test(text);
+
     utterance.lang = isHindi ? "hi-IN" : "en-IN";
-    utterance.rate = 1.0;
+    utterance.rate = this.playbackSpeed;
     utterance.pitch = 1.05;
+    this.lastSpokenText = text;
 
     // Select suitable female assistant voice if available
     const voices = this.availableVoices.length > 0 ? this.availableVoices : window.speechSynthesis.getVoices();
@@ -283,6 +295,34 @@ class LexiVoiceManager {
       this.isSpeakingState = false;
       this.activeUtterance = null;
     }
+  }
+
+  public setPlaybackSpeed(speed: number) {
+    this.playbackSpeed = speed;
+  }
+
+  public getPlaybackSpeed(): number {
+    return this.playbackSpeed;
+  }
+
+  public setVoiceMode(mode: "auto" | "hindi" | "english" | "hinglish") {
+    this.voiceMode = mode;
+  }
+
+  public getVoiceMode(): "auto" | "hindi" | "english" | "hinglish" {
+    return this.voiceMode;
+  }
+
+  public replay() {
+    if (this.lastSpokenText) {
+      this.speak(this.lastSpokenText, { force: true });
+    }
+  }
+
+  public hasNaturalHindiVoice(): boolean {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+    const voices = this.availableVoices.length > 0 ? this.availableVoices : window.speechSynthesis.getVoices();
+    return voices.some((v) => v.lang.includes("hi") || v.name.toLowerCase().includes("hindi"));
   }
 
   public isListening(): boolean {

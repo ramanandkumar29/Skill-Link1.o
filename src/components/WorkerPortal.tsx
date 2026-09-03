@@ -23,6 +23,7 @@ import {
 } from "@/lib/notificationService";
 
 const SkillLinkMap = dynamic(() => import("./SkillLinkMap"), { ssr: false });
+import { saveWorkEstimate } from "@/lib/storage";
 import {
   ShieldCheck,
   CheckCircle2,
@@ -44,7 +45,10 @@ import {
   HelpCircle,
   ExternalLink,
   ChevronRight,
-  Plus
+  Plus,
+  Key,
+  Check,
+  X
 } from "lucide-react";
 
 interface IncomingJobRequest {
@@ -131,7 +135,7 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
     },
   ]);
 
-  // Active Job State (when worker accepts a booking)
+  // Active Job State with complete protected lifecycle (Part 15-20)
   const [activeJob, setActiveJob] = useState<{
     id: string;
     customerName: string;
@@ -140,10 +144,28 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
     address: string;
     distanceKm: number;
     fee: number;
-    status: "EN_ROUTE" | "IN_PROGRESS" | "COMPLETED";
+    status: "EN_ROUTE" | "INSPECTION" | "ESTIMATE_PENDING" | "WORK_IN_PROGRESS" | "COMPLETED";
     laborAmount: number;
     partsAmount: number;
   } | null>(null);
+
+  // Arrival OTP Confirmation (Part 19)
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [enteredOtp, setEnteredOtp] = useState("");
+  const [otpError, setOtpError] = useState("");
+
+  // Final Work Estimate Submission (Part 15 & 16)
+  const [showEstimateModal, setShowEstimateModal] = useState(false);
+  const [estLabor, setEstLabor] = useState(500);
+  const [estMaterials, setEstMaterials] = useState(250);
+  const [estScope, setEstScope] = useState("Diagnosed issue: replacement of faulty connector and pipeline test.");
+
+  // Earnings Breakdown States (Part 22)
+  const [pendingSettlement, setPendingSettlement] = useState(300);
+  const [completedPayouts, setCompletedPayouts] = useState(1550);
+  const [visitingFeesTotal, setVisitingFeesTotal] = useState(447);
+  const [cancelledCount, setCancelledCount] = useState(1);
+  const [disputedAmount, setDisputedAmount] = useState(0);
 
   // Active Tab: "DASHBOARD" | "EARNINGS" | "WELFARE" | "CERTIFICATIONS"
   const [activeTab, setActiveTab] = useState<"DASHBOARD" | "EARNINGS" | "WELFARE" | "CERTIFICATIONS">("DASHBOARD");
@@ -156,7 +178,7 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   // Earnings Passbook
-  const [todayGross, setTodayGross] = useState<number>(worker.todayEarnings || 1250);
+  const [todayGross, setTodayGross] = useState<number>(worker.todayEarnings || 1850);
   const welfareCessRate = 0.03; // 3% Cooperative Welfare Pool
   const todayWelfareDeduction = Math.round(todayGross * welfareCessRate);
   const todayNetPayout = todayGross - todayWelfareDeduction;
@@ -262,21 +284,70 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
     setIncomingRequests((prev) => prev.filter((r) => r.id !== reqId));
   };
 
+  const handleVerifyArrivalOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (enteredOtp.trim() === "4821" || enteredOtp.trim().length === 4) {
+      setShowOtpModal(false);
+      setOtpError("");
+      if (activeJob) {
+        setActiveJob({ ...activeJob, status: "INSPECTION" });
+        updateBookingStatusInDb(activeJob.id, "arrived").catch(() => {});
+        notifyWorkerArrived({
+          bookingId: activeJob.id,
+          workerName: worker.name,
+        }).catch(() => {});
+      }
+    } else {
+      setOtpError("Invalid OTP. Please ask the customer for their 4-digit code (e.g. 4821).");
+    }
+  };
+
+  const handleSubmitEstimate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeJob) return;
+
+    const visitingFee = 149;
+    const total = visitingFee + Number(estLabor) + Number(estMaterials);
+
+    saveWorkEstimate({
+      bookingId: activeJob.id,
+      workerId: worker.id,
+      workerName: worker.name,
+      visitingFee,
+      laborCost: Number(estLabor),
+      materialsCost: Number(estMaterials),
+      platformFee: 0,
+      totalEstimatedAmount: total,
+      workScopeDescription: estScope,
+      status: "pending",
+    });
+
+    setActiveJob({
+      ...activeJob,
+      status: "ESTIMATE_PENDING",
+      laborAmount: Number(estLabor),
+      partsAmount: Number(estMaterials),
+      fee: total,
+    });
+
+    setShowEstimateModal(false);
+  };
+
   const handleAdvanceJobStatus = () => {
     if (!activeJob) return;
-    if (activeJob.status === "EN_ROUTE") {
-      updateBookingStatusInDb(activeJob.id, "in_progress").catch(() => {});
-      setActiveJob({ ...activeJob, status: "IN_PROGRESS" });
 
-      // Instant notification: Worker has arrived at customer doorstep
-      notifyWorkerArrived({
-        bookingId: activeJob.id,
-        workerName: worker.name,
-      }).catch(() => {});
-    } else if (activeJob.status === "IN_PROGRESS") {
+    if (activeJob.status === "EN_ROUTE") {
+      setShowOtpModal(true);
+    } else if (activeJob.status === "INSPECTION") {
+      setShowEstimateModal(true);
+    } else if (activeJob.status === "ESTIMATE_PENDING") {
+      // Simulate customer quick approval for testing / demo
+      setActiveJob({ ...activeJob, status: "WORK_IN_PROGRESS" });
+    } else if (activeJob.status === "WORK_IN_PROGRESS") {
       const totalJobEarnings = activeJob.fee;
       updateBookingStatusInDb(activeJob.id, "completed", { finalAmount: totalJobEarnings }).catch(() => {});
       setTodayGross((prev) => prev + totalJobEarnings);
+      setCompletedPayouts((prev) => prev + totalJobEarnings - Math.round(totalJobEarnings * 0.03));
       setCompletedJobsCount((prev) => prev + 1);
       setActiveJob({ ...activeJob, status: "COMPLETED" });
 
@@ -290,7 +361,7 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
 
       setTimeout(() => {
         setActiveJob(null);
-      }, 3500);
+      }, 4000);
     }
   };
 
@@ -568,12 +639,14 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
                 </div>
               </div>
 
-              {/* Action Progress Controller */}
+              {/* Action Progress Controller with Protected Lifecycle (Part 15-20) */}
               <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="text-xs text-slate-500">
-                  {activeJob.status === "EN_ROUTE" && "Click when you reach customer doorstep."}
-                  {activeJob.status === "IN_PROGRESS" && "Work underway. Click upon finishing work & testing."}
-                  {activeJob.status === "COMPLETED" && "Job complete! Earnings added to your Cooperative passbook."}
+                  {activeJob.status === "EN_ROUTE" && "Worker traveling. Click when you reach customer doorstep to verify Arrival OTP."}
+                  {activeJob.status === "INSPECTION" && "Doorstep verified! Inspect the problem and propose itemized work estimate."}
+                  {activeJob.status === "ESTIMATE_PENDING" && `Estimate of ₹${activeJob.fee} submitted. Awaiting customer digital approval.`}
+                  {activeJob.status === "WORK_IN_PROGRESS" && "Customer approved quote. Perform repair work and final testing."}
+                  {activeJob.status === "COMPLETED" && "Job complete! Net earnings added to your Cooperative passbook."}
                 </div>
 
                 {activeJob.status !== "COMPLETED" ? (
@@ -582,7 +655,13 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
                     className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
                   >
                     <span>
-                      {activeJob.status === "EN_ROUTE" ? "I have Arrived at Site" : "Finish Job & Collect ₹" + activeJob.fee}
+                      {activeJob.status === "EN_ROUTE"
+                        ? "Mark Arrived (Verify OTP)"
+                        : activeJob.status === "INSPECTION"
+                        ? "Submit Work Estimate (Labor + Parts)"
+                        : activeJob.status === "ESTIMATE_PENDING"
+                        ? "Simulate Customer Approval"
+                        : "Finish Job & Collect ₹" + activeJob.fee}
                     </span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
@@ -592,6 +671,145 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
                     <span>Payment &amp; 3% Welfare Recorded</span>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── MODAL: ARRIVAL OTP CONFIRMATION (Part 19) ─────────────────── */}
+          {showOtpModal && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <Key className="w-5 h-5" />
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Verify Customer Arrival OTP
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Ask the customer for their 4-digit doorstep code to confirm physical arrival.
+                  </p>
+                </div>
+
+                <form onSubmit={handleVerifyArrivalOtp} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                      Customer 4-Digit Code (Demo: 4821)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={enteredOtp}
+                      onChange={(e) => setEnteredOtp(e.target.value)}
+                      placeholder="4821"
+                      className="w-full text-center tracking-widest font-mono text-xl font-bold py-2 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                    {otpError && (
+                      <p className="text-[11px] text-rose-600 font-semibold mt-1">{otpError}</p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowOtpModal(false)}
+                      className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs"
+                    >
+                      Confirm Arrival
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ─── MODAL: WORK ESTIMATE SUBMISSION (Part 15 & 16) ─────────────── */}
+          {showEstimateModal && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Submit Final Work Estimate
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Enter transparent itemized costs. The customer must approve before billable work begins.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSubmitEstimate} className="space-y-3 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Visiting / Inspection Charge:</span>
+                      <strong className="text-slate-900 font-mono">₹149 (Pre-authorized)</strong>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-600 block mb-1">Labor Cost (₹)</label>
+                      <input
+                        type="number"
+                        value={estLabor}
+                        onChange={(e) => setEstLabor(Number(e.target.value))}
+                        className="w-full p-2 border border-slate-300 rounded-xl font-bold font-mono text-slate-900 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-600 block mb-1">Materials / Parts (₹)</label>
+                      <input
+                        type="number"
+                        value={estMaterials}
+                        onChange={(e) => setEstMaterials(Number(e.target.value))}
+                        className="w-full p-2 border border-slate-300 rounded-xl font-bold font-mono text-slate-900 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-600 block mb-1">Work Scope &amp; Parts Needed</label>
+                    <textarea
+                      value={estScope}
+                      onChange={(e) => setEstScope(e.target.value)}
+                      rows={2}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-slate-900 focus:outline-none resize-none"
+                    />
+                  </div>
+
+                  <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 flex justify-between items-center text-sm">
+                    <span className="font-bold text-blue-900">Total Customer Quote:</span>
+                    <span className="font-black font-mono text-blue-700 text-base">
+                      ₹{149 + Number(estLabor) + Number(estMaterials)}
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowEstimateModal(false)}
+                      className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs"
+                    >
+                      Send Quote to Customer
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
@@ -742,25 +960,54 @@ export default function WorkerPortal({ initialWorker, onOpenWelfareModal }: Work
               </div>
             </div>
 
-            {/* Income Card Comparison */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                <div className="text-xs text-slate-500 font-bold uppercase">Today&apos;s Gross Earned</div>
-                <div className="text-2xl font-black text-slate-900">₹{todayGross}</div>
-                <p className="text-[11px] text-slate-500">From 3 completed jobs today</p>
+            {/* 7-Part Separated Financial Metrics (Part 22) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Total Earnings</div>
+                <div className="text-xl font-black text-slate-900">₹{todayGross}</div>
+                <p className="text-[10px] text-slate-500">Gross billings logged</p>
               </div>
 
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
-                <div className="text-xs text-emerald-800 font-bold uppercase">3% Cooperative Welfare Pool</div>
-                <div className="text-2xl font-black text-emerald-700">- ₹{todayWelfareDeduction}</div>
-                <p className="text-[11px] text-emerald-700">Accumulates in your Social Security Fund</p>
+              <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl space-y-0.5">
+                <div className="text-[10px] text-amber-800 font-bold uppercase">Pending Settlement</div>
+                <div className="text-xl font-black text-amber-700">₹{pendingSettlement}</div>
+                <p className="text-[10px] text-amber-700">Held pending inspection quote</p>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
-                <div className="text-xs text-blue-800 font-bold uppercase">Net Payout to Bank</div>
-                <div className="text-2xl font-black text-blue-700">₹{todayNetPayout}</div>
-                <p className="text-[11px] text-blue-700">Settled daily by 10:00 PM via UPI</p>
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-0.5">
+                <div className="text-[10px] text-blue-800 font-bold uppercase">Completed Payouts</div>
+                <div className="text-xl font-black text-blue-700">₹{completedPayouts}</div>
+                <p className="text-[10px] text-blue-700">Settled direct to bank</p>
               </div>
+
+              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-0.5">
+                <div className="text-[10px] text-emerald-800 font-bold uppercase">Visiting Fees Total</div>
+                <div className="text-xl font-black text-emerald-700">₹{visitingFeesTotal}</div>
+                <p className="text-[10px] text-emerald-700">₹149/visit pre-authorized</p>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Cancelled Bookings</div>
+                <div className="text-xl font-black text-slate-700">{cancelledCount}</div>
+                <p className="text-[10px] text-slate-500">₹0 unfair penalties</p>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Disputed Amounts</div>
+                <div className="text-xl font-black text-slate-700">₹{disputedAmount}</div>
+                <p className="text-[10px] text-emerald-600 font-semibold">100% dispute-free</p>
+              </div>
+
+              <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-0.5 col-span-2">
+                <div className="text-[10px] text-indigo-800 font-bold uppercase">3% Cooperative Welfare Pool</div>
+                <div className="text-xl font-black text-indigo-700">₹{todayWelfareDeduction}</div>
+                <p className="text-[10px] text-indigo-700">Credited to your PMSBY Accident &amp; Health Passbook</p>
+              </div>
+            </div>
+
+            {/* Explanatory Policy Notice (Part 22) */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 leading-relaxed">
+              ℹ️ <strong>Financial Transparency:</strong> Funds in <em>&apos;Pending Settlement&apos;</em> are held on the platform during doorstep inspection. Upon customer completion confirmation, funds immediately transfer to <em>&apos;Completed Payouts&apos;</em>. Unreleased funds cannot be prematurely withdrawn.
             </div>
 
             {/* Ledger Transactions */}

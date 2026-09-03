@@ -28,6 +28,9 @@ import { KycDocument } from "@/lib/kycVerificationService";
 
 interface DocumentViewerModalProps {
   document: KycDocument | null;
+  documents?: KycDocument[];
+  currentIndex?: number;
+  onNavigate?: (index: number) => void;
   onClose: () => void;
   workerName: string;
   workerOccupation?: string;
@@ -40,6 +43,9 @@ interface DocumentViewerModalProps {
 
 export default function DocumentViewerModal({
   document,
+  documents,
+  currentIndex,
+  onNavigate,
   onClose,
   workerName,
   workerOccupation,
@@ -58,16 +64,28 @@ export default function DocumentViewerModal({
   const [showRejectBox, setShowRejectBox] = useState(false);
   const totalPages = document?.fileType === "application/pdf" ? 2 : 1;
 
-  // Accessibility: Close on Escape key
+  // Sync admin note if document changes via next/prev
+  useEffect(() => {
+    setAdminNote(document?.verificationNotes || "");
+    setZoom(100);
+    setRotation(0);
+    setCurrentPage(1);
+  }, [document?.id]);
+
+  // Accessibility: Close on Escape key & Arrow navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
+      } else if (e.key === "ArrowLeft" && typeof currentIndex === "number" && onNavigate && currentIndex > 0) {
+        onNavigate(currentIndex - 1);
+      } else if (e.key === "ArrowRight" && typeof currentIndex === "number" && onNavigate && documents && currentIndex < documents.length - 1) {
+        onNavigate(currentIndex + 1);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, currentIndex, onNavigate, documents]);
 
   if (!document) return null;
 
@@ -134,6 +152,33 @@ export default function DocumentViewerModal({
 
           {/* Quick Header Controls */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Previous / Next Document Navigation */}
+            {documents && documents.length > 1 && typeof currentIndex === "number" && onNavigate && (
+              <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs text-slate-300 mr-1">
+                <button
+                  type="button"
+                  onClick={() => onNavigate(Math.max(0, currentIndex - 1))}
+                  disabled={currentIndex <= 0}
+                  className="p-1 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-30 transition-colors"
+                  title="Previous Document (Left Arrow)"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="font-mono text-[11px] px-2 text-slate-300 select-none">
+                  {currentIndex + 1} / {documents.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigate(Math.min(documents.length - 1, currentIndex + 1))}
+                  disabled={currentIndex >= documents.length - 1}
+                  className="p-1 hover:bg-slate-700 rounded text-slate-300 disabled:opacity-30 transition-colors"
+                  title="Next Document (Right Arrow)"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleDownload}

@@ -213,6 +213,78 @@ export default function ChatMessage({
               </div>
             </div>
           )}
+
+          {/* Contextual Action Chips (Part 26) */}
+          {!isUser && onSendMessage && message.content && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {message.content.toLowerCase().includes("plumb") || message.content.toLowerCase().includes("leak") ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Find nearby plumbers in Sector 17")}
+                    className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[11px] font-semibold rounded-full border border-blue-200 transition-colors shadow-2xs"
+                  >
+                    💧 Find Nearby Plumbers
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Visiting fee kitni hai aur kaam ka final price kaise pata chalega?")}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-medium rounded-full border border-slate-200 transition-colors shadow-2xs"
+                  >
+                    💰 Explain Pricing (₹149)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Pipe burst emergency mein kya karein?")}
+                    className="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 text-[11px] font-medium rounded-full border border-rose-200 transition-colors shadow-2xs"
+                  >
+                    🚨 Emergency Service
+                  </button>
+                </>
+              ) : message.content.toLowerCase().includes("electric") || message.content.toLowerCase().includes("spark") ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Locate emergency electricians near me")}
+                    className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[11px] font-semibold rounded-full border border-blue-200 transition-colors shadow-2xs"
+                  >
+                    ⚡ Emergency Electrician
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Bijli ke inspection charge aur work estimate kaise kaam karta hai?")}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-medium rounded-full border border-slate-200 transition-colors shadow-2xs"
+                  >
+                    💰 Visiting Fee Info (₹149)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Electrical safety guidelines")}
+                    className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-700 text-[11px] font-medium rounded-full border border-amber-200 transition-colors shadow-2xs"
+                  >
+                    🛡️ Main Switch Safety Tips
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Show nearby verified cooperative artisans")}
+                    className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 text-[11px] font-semibold rounded-full border border-blue-200 transition-colors shadow-2xs"
+                  >
+                    🔍 Nearby Verified Workers
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSendMessage("Skill-Link inspection fee aur payment protection explain karein")}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-medium rounded-full border border-slate-200 transition-colors shadow-2xs"
+                  >
+                    💰 Pricing & Visiting Charge
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Location Request Card */}

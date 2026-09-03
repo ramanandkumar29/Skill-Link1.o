@@ -476,3 +476,175 @@ CREATE POLICY "Admins can view feedback"
             AND profiles.role IN ('cooperative_admin', 'super_admin')
         )
     );
+
+-- ==============================================================================
+-- 11. WORK ESTIMATES TABLE (PROTECTED WORKFLOW & CUSTOMER APPROVAL)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.work_estimates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE CASCADE,
+    worker_id UUID REFERENCES public.workers(id) ON DELETE SET NULL,
+    visiting_fee NUMERIC(10,2) DEFAULT 149.00,
+    labor_cost NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    materials_cost NUMERIC(10,2) DEFAULT 0.00,
+    platform_fee NUMERIC(10,2) DEFAULT 0.00,
+    total_estimated_amount NUMERIC(10,2) NOT NULL,
+    work_scope_description TEXT NOT NULL,
+    materials_breakdown TEXT,
+    status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'approved' | 'revision_requested' | 'declined'
+    customer_notes TEXT,
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_estimates_booking ON public.work_estimates(booking_id);
+
+ALTER TABLE public.work_estimates ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants view estimates" ON public.work_estimates;
+CREATE POLICY "Participants view estimates"
+    ON public.work_estimates FOR SELECT
+    TO authenticated
+    USING (
+        booking_id IN (SELECT id FROM public.bookings WHERE customer_id = auth.uid()) OR
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid()) OR
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
+
+DROP POLICY IF EXISTS "Workers can create estimates" ON public.work_estimates;
+CREATE POLICY "Workers can create estimates"
+    ON public.work_estimates FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid()) OR
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
+
+DROP POLICY IF EXISTS "Customers and workers can update estimates" ON public.work_estimates;
+CREATE POLICY "Customers and workers can update estimates"
+    ON public.work_estimates FOR UPDATE
+    TO authenticated
+    USING (
+        booking_id IN (SELECT id FROM public.bookings WHERE customer_id = auth.uid()) OR
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid()) OR
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
+
+-- ==============================================================================
+-- 12. BOOKING LIFECYCLE EVENTS TABLE (IMMUTABLE AUDIT TRAIL)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.booking_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL, -- 'BOOKED' | 'WORKER_ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'OTP_VERIFIED' | 'ESTIMATE_SUBMITTED' | 'ESTIMATE_APPROVED' | 'WORK_COMPLETED' | 'PAYMENT_COMPLETED' | 'DISPUTED' | 'CANCELLED'
+    actor_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    actor_role TEXT DEFAULT 'system',
+    details TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_booking_events_booking ON public.booking_events(booking_id);
+
+ALTER TABLE public.booking_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants view booking events" ON public.booking_events;
+CREATE POLICY "Participants view booking events"
+    ON public.booking_events FOR SELECT
+    TO authenticated
+    USING (
+        booking_id IN (SELECT id FROM public.bookings WHERE customer_id = auth.uid()) OR
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
+
+-- ==============================================================================
+-- 13. DISPUTES AND RESOLUTION AUDIT TABLE
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.disputes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE CASCADE,
+    raised_by_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    raised_by_role TEXT NOT NULL, -- 'customer' | 'worker'
+    dispute_reason TEXT NOT NULL, -- 'WORKER_DID_NOT_ARRIVE' | 'INCORRECT_AMOUNT' | 'POOR_SERVICE_QUALITY' | 'WORK_NOT_COMPLETED' | 'PAYMENT_ISSUE'
+    description TEXT NOT NULL,
+    evidence_urls TEXT[],
+    status TEXT NOT NULL DEFAULT 'UNDER_REVIEW', -- 'UNDER_REVIEW' | 'RESOLVED' | 'REJECTED'
+    resolution_notes TEXT,
+    resolved_by_admin_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_disputes_booking ON public.disputes(booking_id);
+
+ALTER TABLE public.disputes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Participants view disputes" ON public.disputes;
+CREATE POLICY "Participants view disputes"
+    ON public.disputes FOR SELECT
+    TO authenticated
+    USING (
+        raised_by_id = auth.uid() OR
+        booking_id IN (SELECT id FROM public.bookings WHERE customer_id = auth.uid()) OR
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
+
+DROP POLICY IF EXISTS "Authenticated users create disputes" ON public.disputes;
+CREATE POLICY "Authenticated users create disputes"
+    ON public.disputes FOR INSERT
+    TO authenticated
+    WITH CHECK (auth.uid() IS NOT NULL);
+
+-- ==============================================================================
+-- 14. WORKER PAYOUTS & WELFARE SETTLEMENT TABLE
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.worker_payouts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    worker_id UUID REFERENCES public.workers(id) ON DELETE CASCADE,
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+    gross_amount NUMERIC(10,2) NOT NULL,
+    visiting_fee NUMERIC(10,2) DEFAULT 149.00,
+    labor_amount NUMERIC(10,2) NOT NULL,
+    welfare_fund_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00, -- 3% Social Security Pool
+    net_payout NUMERIC(10,2) NOT NULL,
+    payout_status TEXT NOT NULL DEFAULT 'pending_settlement', -- 'pending_settlement' | 'completed' | 'held_in_dispute'
+    settled_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_payouts_worker ON public.worker_payouts(worker_id);
+
+ALTER TABLE public.worker_payouts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Workers view own payouts" ON public.worker_payouts;
+CREATE POLICY "Workers view own payouts"
+    ON public.worker_payouts FOR SELECT
+    TO authenticated
+    USING (
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid()) OR
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );

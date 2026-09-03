@@ -132,7 +132,17 @@ export interface ServiceBooking {
   serviceType: string;
   bookingDate: string;
   preferredTime?: string;
-  status: "Pending" | "Confirmed" | "In-Progress" | "Completed" | "Cancelled";
+  status:
+    | "Pending"
+    | "Confirmed"
+    | "En-Route"
+    | "Arrived"
+    | "In-Progress"
+    | "Estimate-Pending"
+    | "Estimate-Approved"
+    | "Completed"
+    | "Cancelled"
+    | "Disputed";
   visitFeePaid: boolean;
   visitFeeAmount: number;
   cooperativeWelfareCess?: number;
@@ -140,6 +150,14 @@ export interface ServiceBooking {
   completionPhotoUrl?: string;
   emergencySos?: boolean;
   notes?: string;
+  arrivalOtp?: string;
+  estimateLabor?: number;
+  estimateMaterials?: number;
+  estimateStatus?: "pending" | "approved" | "revision_requested" | "declined";
+  estimateNotes?: string;
+  disputeStatus?: "NONE" | "UNDER_REVIEW" | "RESOLVED";
+  disputeReason?: string;
+  disputeNotes?: string;
 }
 
 export const COOPERATIVE_SOCIETIES: CooperativeSociety[] = [

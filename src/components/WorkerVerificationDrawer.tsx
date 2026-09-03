@@ -29,7 +29,12 @@ import {
   Sparkles,
   HelpCircle,
   ExternalLink,
-  Bot
+  Bot,
+  Star,
+  Compass,
+  Languages,
+  CheckCheck,
+  FileText
 } from "lucide-react";
 import {
   DetailedKycWorker,
@@ -57,15 +62,15 @@ export default function WorkerVerificationDrawer({
     "OVERVIEW" | "PERSONAL" | "SKILLS" | "DOCUMENTS" | "TIMELINE"
   >("OVERVIEW");
 
-  // Selected document for modal viewer
-  const [inspectingDoc, setInspectingDoc] = useState<KycDocument | null>(null);
+  // Selected document index for modal viewer
+  const [inspectingDocIndex, setInspectingDocIndex] = useState<number | null>(null);
 
   // Document action prompt (Reject or Re-upload reason)
   const [rejectionTargetDoc, setRejectionTargetDoc] = useState<KycDocument | null>(null);
   const [selectedReason, setSelectedReason] = useState<string>(REJECTION_REASONS[0]);
   const [customReason, setCustomReason] = useState<string>("");
 
-  // Final confirmation modal
+  // Final confirmation modals
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [showRequestInfoModal, setShowRequestInfoModal] = useState(false);
@@ -73,8 +78,8 @@ export default function WorkerVerificationDrawer({
   const [finalAdminNotes, setFinalAdminNotes] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Checklist accordion expansion states
-  const [expandedChecklistId, setExpandedChecklistId] = useState<string | null>(null);
+  // Accordion expansion states
+  const [expandedLevel, setExpandedLevel] = useState<number | null>(null);
 
   // LEXI AI Analysis visibility toggle
   const [showLexiSummary, setShowLexiSummary] = useState(true);
@@ -85,8 +90,8 @@ export default function WorkerVerificationDrawer({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (inspectingDoc) {
-          setInspectingDoc(null);
+        if (inspectingDocIndex !== null) {
+          setInspectingDocIndex(null);
         } else if (showApprovalModal) {
           setShowApprovalModal(false);
         } else if (showRejectionModal) {
@@ -105,9 +110,12 @@ export default function WorkerVerificationDrawer({
       window.dispatchEvent(new CustomEvent("skill-link-modal-close"));
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [inspectingDoc, showApprovalModal, showRejectionModal, showRequestInfoModal, onClose]);
+  }, [inspectingDocIndex, showApprovalModal, showRejectionModal, showRequestInfoModal, onClose]);
 
   if (!worker) return null;
+
+  // Active inspecting document object
+  const inspectingDoc = inspectingDocIndex !== null ? worker.documents[inspectingDocIndex] : null;
 
   // Calculate verification progress
   const totalChecks = worker.checklist.length || 5;
@@ -123,20 +131,6 @@ export default function WorkerVerificationDrawer({
     onWorkerUpdated();
   };
 
-  const handleOpenRejectPrompt = (doc: KycDocument) => {
-    setRejectionTargetDoc(doc);
-    setSelectedReason(REJECTION_REASONS[0]);
-    setCustomReason("");
-  };
-
-  const handleConfirmRejectDoc = () => {
-    if (!rejectionTargetDoc) return;
-    const finalReason = customReason.trim() || selectedReason;
-    updateDocumentStatus(worker.id, rejectionTargetDoc.id, "REJECTED", finalReason);
-    setRejectionTargetDoc(null);
-    onWorkerUpdated();
-  };
-
   const handleRequestReupload = (docId: string, notes?: string) => {
     updateDocumentStatus(
       worker.id,
@@ -144,13 +138,6 @@ export default function WorkerVerificationDrawer({
       "REQUIRES_REVIEW",
       notes || "Re-upload requested: Unclear scan / details missing"
     );
-    onWorkerUpdated();
-  };
-
-  // Handlers for checklist item toggles
-  const handleToggleChecklist = (checkId: string, currentStatus: string) => {
-    const nextStatus = currentStatus === "VERIFIED" ? "PENDING" : "VERIFIED";
-    updateChecklistItem(worker.id, checkId, nextStatus as any);
     onWorkerUpdated();
   };
 
@@ -172,7 +159,7 @@ export default function WorkerVerificationDrawer({
       finalizeWorkerKycDecision(
         worker.id,
         "REJECTED",
-        finalAdminNotes || "Application rejected due to failed verification."
+        finalAdminNotes || selectedReason || "Application rejected due to failed verification."
       );
       setIsProcessing(false);
       setShowRejectionModal(false);
@@ -215,10 +202,10 @@ export default function WorkerVerificationDrawer({
       {/* Centered Modern Modal Card (Desktop 80-90% max width) */}
       <div className="w-full max-w-5xl xl:max-w-6xl h-[92vh] max-h-[880px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden relative animate-in zoom-in-95 duration-200">
         
-        {/* ─── 1. COMPACT & CLEAN HEADER ──────────────────────────────────── */}
+        {/* ─── 1. COMPACT & CLEAN HEADER (Part 2) ─────────────────────────── */}
         <div className="px-5 py-3.5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3.5 min-w-0">
-            {/* Worker Avatar */}
+            {/* Worker Profile Photo */}
             <div className="relative shrink-0">
               <img
                 src={worker.profilePhoto || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=150"}
@@ -236,7 +223,7 @@ export default function WorkerVerificationDrawer({
               />
             </div>
 
-            {/* Worker Name, Profession & IDs */}
+            {/* Name, Profession, Worker ID, Society, Registration Date */}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-bold text-white truncate">
@@ -258,23 +245,25 @@ export default function WorkerVerificationDrawer({
                 </span>
               </div>
 
-              <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">
-                Worker ID: <span className="text-slate-200 font-bold">{worker.workerId}</span> • Cooperative: {worker.societyReg}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-400 font-mono mt-0.5">
+                <span>Worker ID: <strong className="text-slate-200">{worker.workerId}</strong></span>
+                <span>• Society: <strong className="text-slate-200">{worker.societyReg}</strong></span>
+                <span className="hidden md:inline">• Registered: <strong className="text-slate-300">{worker.joiningDate || "12-Jan-2022"}</strong></span>
+              </div>
             </div>
           </div>
 
-          {/* Right Header Progress & Close */}
+          {/* Right Header: Progress Indicator & Close */}
           <div className="flex items-center gap-4 shrink-0">
             {/* KYC Progress Pill */}
             <div className="hidden sm:flex flex-col items-end">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
                 <span>KYC Progress:</span>
                 <span className={progressPct === 100 ? "text-emerald-400" : "text-blue-400"}>
-                  {progressPct}%
+                  {verifiedChecks} / {totalChecks} Verified ({progressPct}%)
                 </span>
               </div>
-              <div className="w-28 bg-slate-800 rounded-full h-1.5 overflow-hidden mt-1 border border-slate-700">
+              <div className="w-32 bg-slate-800 rounded-full h-1.5 overflow-hidden mt-1 border border-slate-700">
                 <div
                   className={`h-full transition-all duration-300 ${
                     progressPct === 100 ? "bg-emerald-500" : "bg-blue-500"
@@ -297,7 +286,7 @@ export default function WorkerVerificationDrawer({
           </div>
         </div>
 
-        {/* ─── 2. TAB NAVIGATION BAR ──────────────────────────────────────── */}
+        {/* ─── 2. TAB NAVIGATION BAR (Part 2) ─────────────────────────────── */}
         <div className="px-5 bg-slate-100 border-b border-slate-200 flex items-center gap-1 overflow-x-auto shrink-0 scrollbar-none">
           <button
             type="button"
@@ -309,7 +298,7 @@ export default function WorkerVerificationDrawer({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Overview & Summary</span>
+            <span>Overview</span>
           </button>
 
           <button
@@ -335,7 +324,7 @@ export default function WorkerVerificationDrawer({
             }`}
           >
             <Award className="w-3.5 h-3.5" />
-            <span>Skills & Certifications</span>
+            <span>Trade Skills</span>
           </button>
 
           <button
@@ -361,7 +350,7 @@ export default function WorkerVerificationDrawer({
             }`}
           >
             <History className="w-3.5 h-3.5" />
-            <span>Audit History</span>
+            <span>Verification History / Audit Log</span>
           </button>
         </div>
 
@@ -369,25 +358,26 @@ export default function WorkerVerificationDrawer({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50/50">
           
           {/* ═════════════════════════════════════════════════════════════════ */}
-          {/* TAB 1: OVERVIEW & QUICK DECISION SUMMARY                          */}
+          {/* TAB 1: OVERVIEW & QUICK DECISION SUMMARY (Part 3, 5, 6)           */}
           {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "OVERVIEW" && (
             <div className="space-y-6">
-              {/* SUMMARY / QUICK DECISION CARD (Section 3) */}
+              
+              {/* SUMMARY & RISK SCORECARD (Part 3) */}
               <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-blue-600" />
-                      Verification Summary & Risk Assessment
+                      Verification Summary & Scorecard
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Cooperative 5-tier inspection scorecard for priority queue processing.
+                      Cooperative 5-tier verification summary for authorized administrative review.
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Overall Risk Badge */}
+                    {/* Risk Badge */}
                     <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs">
                       <span className="text-slate-500 font-medium">Risk Level:</span>
                       <span
@@ -413,36 +403,32 @@ export default function WorkerVerificationDrawer({
                   </div>
                 </div>
 
-                {/* 5 Status Cards Grid */}
+                {/* 5 Status Pill Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
-                  {/* Identity */}
                   <div className="p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-200 text-emerald-900 flex flex-col justify-between">
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Identity</span>
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">1. Identity</span>
                     <div className="flex items-center gap-1 mt-1 font-bold">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <span>{worker.identityStatus === "VERIFIED" ? "Verified" : "Pending"}</span>
                     </div>
                   </div>
 
-                  {/* Address */}
                   <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 flex flex-col justify-between">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">Address</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">2. Address</span>
                     <div className="flex items-center gap-1 mt-1 font-bold">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <span>Matched</span>
                     </div>
                   </div>
 
-                  {/* Trade Skill */}
                   <div className="p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-200 text-emerald-900 flex flex-col justify-between">
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Trade Skill</span>
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">3. Trade Skill</span>
                     <div className="flex items-center gap-1 mt-1 font-bold">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <span>{worker.experience}</span>
                     </div>
                   </div>
 
-                  {/* Certification */}
                   <div
                     className={`p-2.5 rounded-xl border flex flex-col justify-between ${
                       worker.skillVerificationStatus === "VERIFIED"
@@ -450,7 +436,7 @@ export default function WorkerVerificationDrawer({
                         : "bg-amber-50/60 border-amber-200 text-amber-900"
                     }`}
                   >
-                    <span className="text-[10px] font-bold uppercase">Certification</span>
+                    <span className="text-[10px] font-bold uppercase">4. Certification</span>
                     <div className="flex items-center gap-1 mt-1 font-bold">
                       {worker.skillVerificationStatus === "VERIFIED" ? (
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -461,9 +447,8 @@ export default function WorkerVerificationDrawer({
                     </div>
                   </div>
 
-                  {/* Cooperative Membership */}
                   <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-200 text-blue-900 flex flex-col justify-between col-span-2 sm:col-span-1">
-                    <span className="text-[10px] font-bold text-blue-700 uppercase">Cooperative</span>
+                    <span className="text-[10px] font-bold text-blue-700 uppercase">5. Cooperative</span>
                     <div className="flex items-center gap-1 mt-1 font-bold">
                       <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                       <span>{worker.membershipStatus}</span>
@@ -471,19 +456,219 @@ export default function WorkerVerificationDrawer({
                   </div>
                 </div>
 
-                {/* Specific Issue Callout Notice */}
+                {/* Attention Required Callout */}
                 {worker.riskNote && (
                   <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 leading-relaxed">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold">Attention Required: </span>
+                      <strong className="font-bold">Attention Required: </strong>
                       {worker.riskNote}
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* CONTEXTUAL AI ASSISTANT: ASK LEXI ABOUT THIS WORKER (Section 11) */}
+              {/* INTELLIGENT VERIFICATION INSIGHTS (Part 6) */}
+              <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600" />
+                    Intelligent Verification Insights
+                  </h4>
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Rule-Based Compliance Checks
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {worker.intelligentFlags && worker.intelligentFlags.length > 0 ? (
+                    worker.intelligentFlags.map((flag, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
+                          flag.type === "GREEN"
+                            ? "bg-emerald-50/50 border-emerald-200 text-emerald-900"
+                            : flag.type === "YELLOW"
+                            ? "bg-amber-50/50 border-amber-200 text-amber-900"
+                            : "bg-rose-50/50 border-rose-200 text-rose-900"
+                        }`}
+                      >
+                        <span className="text-sm shrink-0">
+                          {flag.type === "GREEN" ? "🟢" : flag.type === "YELLOW" ? "🟡" : "🔴"}
+                        </span>
+                        <div>
+                          <strong className="font-bold block">{flag.label}</strong>
+                          <span className="text-slate-600 text-[11px] leading-relaxed mt-0.5 block">
+                            {flag.details}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs text-emerald-900 flex items-center gap-2">
+                      <span>🟢</span>
+                      <span>No major anomalies detected across submitted identity and certificate tokens.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Important Advisory Notice (Part 6) */}
+                <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  ℹ️ <strong>Advisory Notice:</strong> Automated analysis assists verification. Final approval is performed by an authorized cooperative administrator.
+                </p>
+              </div>
+
+              {/* SMART 5-LEVEL VERIFICATION AUDIT WORKFLOW (Part 5) */}
+              <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <CheckCheck className="w-4 h-4 text-blue-600" />
+                      5-Level Smart Verification Workflow
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Progressive verification gates required before marketplace dispatch activation.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                    Level {verifiedChecks} of 5 Completed
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {(worker.verificationLevels || []).map((lvl) => {
+                    const isExpanded = expandedLevel === lvl.level;
+                    const isVerified = lvl.status === "VERIFIED";
+
+                    return (
+                      <div
+                        key={lvl.level}
+                        className={`rounded-xl border transition-all ${
+                          isVerified
+                            ? "bg-white border-emerald-200"
+                            : lvl.status === "REQUIRES_REVIEW"
+                            ? "bg-white border-amber-200"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
+                        <div
+                          onClick={() => setExpandedLevel(isExpanded ? null : lvl.level)}
+                          className="p-3 sm:p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs ${
+                                isVerified
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : lvl.status === "REQUIRES_REVIEW"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              L{lvl.level}
+                            </div>
+
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-900 truncate">
+                                  LEVEL {lvl.level}: {lvl.title}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {lvl.subtitle}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isVerified
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                                  : lvl.status === "REQUIRES_REVIEW"
+                                  ? "bg-amber-50 text-amber-700 border-amber-300"
+                                  : "bg-slate-100 text-slate-600 border-slate-200"
+                              }`}
+                            >
+                              {lvl.status}
+                            </span>
+                            <ChevronDown
+                              className={`w-4 h-4 text-slate-400 transition-transform ${
+                                isExpanded ? "rotate-180" : ""
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Expanded Level Audit Details */}
+                        {isExpanded && (
+                          <div className="px-4 pb-3.5 pt-1 border-t border-slate-100 text-xs text-slate-600 space-y-2 animate-in fade-in">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+                              <div>
+                                <span className="text-slate-400 block text-[10px]">Verified By</span>
+                                <strong className="text-slate-800">{lvl.verifiedBy || "Authorized Cooperative Admin"}</strong>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[10px]">Date / Schedule</span>
+                                <span className="text-slate-700 font-mono">{lvl.date || "Today"}</span>
+                              </div>
+                            </div>
+                            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px] text-slate-700">
+                              <strong>Inspector Notes:</strong> {lvl.notes}
+                            </div>
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
+                              <Check className="w-3 h-3 text-blue-600" />
+                              <span>{lvl.automatedCheck}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SERVICE & WORKER PERFORMANCE SUMMARY (Part 3) */}
+              <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <Compass className="w-4 h-4 text-blue-600" />
+                  Service & Marketplace Performance Profile
+                </h4>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px]">Service Radius</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">{worker.serviceRadius || "12 km radius"}</span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px]">Availability</span>
+                    <span className="font-bold text-emerald-700 mt-0.5 block">{worker.availability || "Active / Ready"}</span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px]">Completed Jobs</span>
+                    <span className="font-bold text-slate-900 mt-0.5 block">{worker.totalJobs || 142} Jobs Completed</span>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <span className="text-slate-400 block text-[10px]">Average Customer Rating</span>
+                    <span className="font-bold text-amber-600 mt-0.5 flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                      {worker.rating || 4.92} / 5.0
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center gap-2 text-xs text-slate-600">
+                  <Languages className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>
+                    <strong>Languages Spoken:</strong> {(worker.languagesSpoken || ["Hindi", "Punjabi", "English"]).join(", ")}
+                  </span>
+                </div>
+              </div>
+
+              {/* CONTEXTUAL AI ASSISTANT: ASK LEXI (Part 7) */}
               <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-900 to-indigo-950 text-white rounded-2xl shadow-md space-y-3 relative overflow-hidden">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -541,134 +726,11 @@ export default function WorkerVerificationDrawer({
                   </div>
                 )}
               </div>
-
-              {/* REDESIGNED 5-TIER CHECKLIST ACCORDIONS (Section 8) */}
-              <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      5-Tier Verification Checklist
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Click any row to expand details, inspect verification notes, or toggle status.
-                    </p>
-                  </div>
-                  <span className="text-xs font-bold font-mono text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                    {verifiedChecks} of {totalChecks} Confirmed
-                  </span>
-                </div>
-
-                <div className="space-y-2.5">
-                  {worker.checklist.map((item) => {
-                    const isExpanded = expandedChecklistId === item.id;
-                    const isVerified = item.status === "VERIFIED";
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`rounded-xl border transition-all ${
-                          isVerified
-                            ? "bg-white border-emerald-200"
-                            : "bg-white border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        {/* Header row */}
-                        <div
-                          onClick={() => setExpandedChecklistId(isExpanded ? null : item.id)}
-                          className="p-3 sm:p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div
-                              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                isVerified
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {isVerified ? (
-                                <CheckCircle2 className="w-4 h-4" />
-                              ) : (
-                                <Clock className="w-4 h-4" />
-                              )}
-                            </div>
-
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-slate-900 truncate">
-                                  {item.title || item.label}
-                                </span>
-                                <span className="text-[10px] font-semibold text-slate-400 font-mono uppercase">
-                                  [{item.category}]
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-slate-500 truncate">
-                                {item.description || item.note || item.label}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                isVerified
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-300"
-                                  : item.status === "REQUIRES_REVIEW"
-                                  ? "bg-amber-50 text-amber-700 border-amber-300"
-                                  : "bg-slate-100 text-slate-600 border-slate-200"
-                              }`}
-                            >
-                              {item.status}
-                            </span>
-                            <ChevronDown
-                              className={`w-4 h-4 text-slate-400 transition-transform ${
-                                isExpanded ? "rotate-180" : ""
-                              }`}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Expanded details */}
-                        {isExpanded && (
-                          <div className="px-4 pb-3.5 pt-1 border-t border-slate-100 text-xs text-slate-600 space-y-2.5 animate-in fade-in">
-                            <p className="text-slate-600 leading-relaxed text-[11px]">
-                              {item.description || item.note || item.label}
-                            </p>
-                            {item.note && (
-                              <div className="p-2.5 bg-slate-50 rounded-lg text-slate-700 font-mono text-[11px] border border-slate-200">
-                                <strong>Log Note:</strong> {item.note}
-                              </div>
-                            )}
-                            <div className="flex items-center justify-between pt-1">
-                              <span className="text-[10px] text-slate-400">
-                                Last updated: {item.lastUpdated || "Today, 10:20 AM"}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleChecklist(item.id, item.status);
-                                }}
-                                className={`px-3 py-1 rounded-lg font-bold text-xs transition-colors ${
-                                  isVerified
-                                    ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                                }`}
-                              >
-                                {isVerified ? "Mark as Pending" : "Mark as Verified"}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           )}
 
           {/* ═════════════════════════════════════════════════════════════════ */}
-          {/* TAB 2: PERSONAL & IDENTITY INFORMATION (Section 5)                */}
+          {/* TAB 2: PERSONAL & IDENTITY (Part 3)                               */}
           {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "PERSONAL" && (
             <div className="space-y-5">
@@ -761,7 +823,7 @@ export default function WorkerVerificationDrawer({
           )}
 
           {/* ═════════════════════════════════════════════════════════════════ */}
-          {/* TAB 3: SKILLS & CERTIFICATIONS (Section 6)                        */}
+          {/* TAB 3: TRADE SKILLS (Part 3)                                      */}
           {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "SKILLS" && (
             <div className="space-y-5">
@@ -794,6 +856,24 @@ export default function WorkerVerificationDrawer({
                     ))}
                   </div>
                 </div>
+
+                {worker.secondarySkills && worker.secondarySkills.length > 0 && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                      Secondary Trade Skills:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {worker.secondarySkills.map((sec, idx) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200"
+                        >
+                          • {sec}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Certification Dossier Card */}
@@ -855,7 +935,7 @@ export default function WorkerVerificationDrawer({
           )}
 
           {/* ═════════════════════════════════════════════════════════════════ */}
-          {/* TAB 4: UPLOADED DOCUMENTS & VIEWER (Section 7)                    */}
+          {/* TAB 4: UPLOADED DOCUMENTS & VIEWER (Part 4)                       */}
           {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "DOCUMENTS" && (
             <div className="space-y-4">
@@ -865,17 +945,17 @@ export default function WorkerVerificationDrawer({
                     Uploaded Verification Documents
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Click any document card to open the 2-column inspector viewer.
+                    Click any document card to open the 2-column inspector with Previous / Next navigation.
                   </p>
                 </div>
               </div>
 
               {/* Document Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {worker.documents.map((doc) => (
+                {worker.documents.map((doc, idx) => (
                   <div
                     key={doc.id}
-                    onClick={() => setInspectingDoc(doc)}
+                    onClick={() => setInspectingDocIndex(idx)}
                     className="p-3.5 bg-white rounded-xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
                   >
                     {/* Thumbnail and Title */}
@@ -933,7 +1013,7 @@ export default function WorkerVerificationDrawer({
           )}
 
           {/* ═════════════════════════════════════════════════════════════════ */}
-          {/* TAB 5: AUDIT LOG TIMELINE (Section 9)                             */}
+          {/* TAB 5: AUDIT LOG TIMELINE (Part 2 & 30)                           */}
           {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "TIMELINE" && (
             <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -970,7 +1050,7 @@ export default function WorkerVerificationDrawer({
           )}
         </div>
 
-        {/* ─── 4. STICKY ACTION BAR (Section 10) ──────────────────────────── */}
+        {/* ─── 4. STICKY ACTION BAR (Zero LEXI overlap) ───────────────────── */}
         <div className="px-5 py-3.5 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-500 hidden sm:flex items-center gap-1.5">
             <Info className="w-4 h-4 text-slate-400" />
@@ -981,7 +1061,7 @@ export default function WorkerVerificationDrawer({
             </span>
           </div>
 
-          {/* Action Buttons: Never overlapped by LEXI */}
+          {/* Action Buttons */}
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
             {/* Reject Application */}
             <button
@@ -1013,11 +1093,14 @@ export default function WorkerVerificationDrawer({
         </div>
       </div>
 
-      {/* ─── MODAL: DOCUMENT VIEWER ──────────────────────────────────────── */}
+      {/* ─── MODAL: DOCUMENT VIEWER WITH PREV / NEXT NAVIGATION ──────────── */}
       {inspectingDoc && (
         <DocumentViewerModal
           document={inspectingDoc}
-          onClose={() => setInspectingDoc(null)}
+          documents={worker.documents}
+          currentIndex={inspectingDocIndex ?? 0}
+          onNavigate={(idx) => setInspectingDocIndex(idx)}
+          onClose={() => setInspectingDocIndex(null)}
           workerName={worker.workerName}
           workerOccupation={worker.occupation}
           certificateAuthority={worker.certificationAuthority}

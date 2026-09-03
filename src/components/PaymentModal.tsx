@@ -157,11 +157,13 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
       occupation: worker.occupation,
       clientName,
       clientPhone,
+      clientAddress,
       serviceType: `${worker.occupation} - ${preferredSlot}`,
       bookingDate: `${preferredDate}, ${preferredSlot}`,
       status: "Confirmed",
       visitFeePaid: true,
       visitFeeAmount: totalPayable,
+      arrivalOtp: "4821",
     });
 
     setActiveBookingId(newBooking.id);

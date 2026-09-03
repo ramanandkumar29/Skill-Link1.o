@@ -90,6 +90,14 @@ export interface DetailedKycWorker {
   riskLevel?: "LOW" | "MEDIUM" | "HIGH";
   recommendedDecision?: "APPROVE" | "NEEDS_REVIEW" | "REJECT";
   riskNote?: string;
+  serviceRadius?: string;
+  availability?: string;
+  totalJobs?: number;
+  rating?: number;
+  languagesSpoken?: string[];
+  secondarySkills?: string[];
+  verificationLevels?: KycVerificationLevel[];
+  intelligentFlags?: IntelligentKycFlag[];
   lexiSummary?: {
     identityStatus: string;
     membershipStatus: string;
@@ -112,6 +120,23 @@ export interface DetailedKycWorker {
   checklist: KycChecklistItem[];
   auditTimeline: KycAuditLog[];
   warnings: string[];
+}
+
+export interface KycVerificationLevel {
+  level: number;
+  title: string;
+  subtitle: string;
+  status: "VERIFIED" | "PENDING" | "REQUIRES_REVIEW" | "REJECTED";
+  verifiedBy?: string;
+  date?: string;
+  notes?: string;
+  automatedCheck: string;
+}
+
+export interface IntelligentKycFlag {
+  type: "GREEN" | "YELLOW" | "RED";
+  label: string;
+  details: string;
 }
 
 export function generateLexiKycAuditSummary(worker: DetailedKycWorker) {
@@ -178,6 +203,81 @@ const INITIAL_KYC_WORKERS: DetailedKycWorker[] = [
     riskLevel: "LOW",
     recommendedDecision: "NEEDS_REVIEW",
     riskNote: "⚠ Certification requires manual verification. ITI registration number could not be automatically verified against online portal.",
+    serviceRadius: "12 km radius (Mohali & Chandigarh Sector 17-70)",
+    availability: "Active / Available for Dispatches",
+    totalJobs: 142,
+    rating: 4.92,
+    languagesSpoken: ["Hindi", "Punjabi", "English (Basic)"],
+    secondarySkills: ["Inverter Battery Setup", "Heavy MCB Replacement", "Solar Inverter Maintenance"],
+    intelligentFlags: [
+      {
+        type: "GREEN",
+        label: "Identity & Society Roster Matched",
+        details: "Masked Aadhaar token and live photograph match verified physical cooperative society ledger."
+      },
+      {
+        type: "YELLOW",
+        label: "Manual Certification Review Recommended",
+        details: "ITI Trade Certificate uploaded requires cross-verification with NCVT portal or Punjab Board records."
+      },
+      {
+        type: "GREEN",
+        label: "Clean Dispute & Safety History",
+        details: "Zero customer safety disputes or complaints recorded over 142 completed jobs."
+      }
+    ],
+    verificationLevels: [
+      {
+        level: 1,
+        title: "Identity Verification",
+        subtitle: "Aadhaar Consistency & Photo Match",
+        status: "VERIFIED",
+        verifiedBy: "Coop Inspector Balwinder Singh",
+        date: "Today, 10:20 AM",
+        notes: "Masked Aadhaar matches society membership identity token.",
+        automatedCheck: "Document consistency check completed successfully."
+      },
+      {
+        level: 2,
+        title: "Personal Information Verification",
+        subtitle: "Phone, Residence & Jurisdiction",
+        status: "VERIFIED",
+        verifiedBy: "Inspector Balwinder Singh",
+        date: "Today, 10:20 AM",
+        notes: "Residential address is within Mohali Phase 7 cooperative jurisdiction.",
+        automatedCheck: "Pincode jurisdiction consistency validated."
+      },
+      {
+        level: 3,
+        title: "Cooperative Membership Verification",
+        subtitle: "Active Society Registration",
+        status: "VERIFIED",
+        verifiedBy: "Society Registrar J. S. Dhillon",
+        date: "Today, 10:20 AM",
+        notes: "Active member in TLCS-2024-512 since Jan 2022.",
+        automatedCheck: "Society registration number TLCS-2024-512 confirmed."
+      },
+      {
+        level: 4,
+        title: "Trade Skill & Certification",
+        subtitle: "NCVT National Trade Certificate",
+        status: "REQUIRES_REVIEW",
+        verifiedBy: "Pending Technical Inspector",
+        date: "Today, 10:20 AM",
+        notes: "Requires manual roll number check against state ITI directory.",
+        automatedCheck: "Certificate image format & metadata verified."
+      },
+      {
+        level: 5,
+        title: "Final Cooperative Approval",
+        subtitle: "Cooperative Admin Physical Sign-Off",
+        status: "PENDING",
+        verifiedBy: "Authorized Cooperative Admin",
+        date: "Awaiting Level 4 clearance",
+        notes: "Tier-5 marketplace badge will activate upon final admin approval.",
+        automatedCheck: "Human cooperative administrator approval required."
+      }
+    ],
 
     aadhaarMasked: "XXXX-XXXX-4912",
     identityDocType: "Government Aadhaar Card (Masked)",
@@ -307,6 +407,76 @@ const INITIAL_KYC_WORKERS: DetailedKycWorker[] = [
     riskLevel: "LOW",
     recommendedDecision: "NEEDS_REVIEW",
     riskNote: "⚠ Address certificate is a photographed rent agreement; society secretary physical confirmation recommended.",
+    serviceRadius: "15 km radius (Chandigarh Tricity & Panchkula)",
+    availability: "Available / Ready for Assignment",
+    totalJobs: 89,
+    rating: 4.96,
+    languagesSpoken: ["Hindi", "English", "Punjabi"],
+    secondarySkills: ["Blood Sugar & BP Tracking", "Post-Op Mobility Support", "CPR & First Aid"],
+    intelligentFlags: [
+      {
+        type: "GREEN",
+        label: "HSSC Healthcare Diploma Verified",
+        details: "General Duty Assistant Diploma verified valid through October 2026."
+      },
+      {
+        type: "YELLOW",
+        label: "Address Proof Confirmation",
+        details: "Photo copy of residential lease agreement requires secretary signature verification."
+      }
+    ],
+    verificationLevels: [
+      {
+        level: 1,
+        title: "Identity Verification",
+        subtitle: "Aadhaar Match & Token Authenticated",
+        status: "VERIFIED",
+        verifiedBy: "Inspector Balwinder Singh",
+        date: "Yesterday, 05:00 PM",
+        notes: "Identity token matches Punjab Caregivers registry.",
+        automatedCheck: "Document consistency check completed successfully."
+      },
+      {
+        level: 2,
+        title: "Personal Information Verification",
+        subtitle: "Phone & Residential Verification",
+        status: "REQUIRES_REVIEW",
+        verifiedBy: "Inspector Balwinder Singh",
+        date: "Yesterday, 05:00 PM",
+        notes: "Lease agreement requires physical center stamp verification.",
+        automatedCheck: "Address scan quality verified."
+      },
+      {
+        level: 3,
+        title: "Cooperative Membership Verification",
+        subtitle: "Caregivers Cooperative Union PTCU-2024-119",
+        status: "VERIFIED",
+        verifiedBy: "Union Secretary R. K. Sood",
+        date: "Yesterday, 05:00 PM",
+        notes: "Active registered union member in good standing.",
+        automatedCheck: "Union ledger entry verified."
+      },
+      {
+        level: 4,
+        title: "Trade Skill & Certification",
+        subtitle: "Healthcare Sector Skill Council (HSSC)",
+        status: "VERIFIED",
+        verifiedBy: "Medical Council Auditor",
+        date: "Yesterday, 05:00 PM",
+        notes: "GDA Healthcare diploma accredited and current.",
+        automatedCheck: "Accreditation roll ID validated."
+      },
+      {
+        level: 5,
+        title: "Final Cooperative Approval",
+        subtitle: "Cooperative Admin Physical Sign-Off",
+        status: "PENDING",
+        verifiedBy: "Authorized Cooperative Admin",
+        date: "Pending Level 2 lease clearance",
+        notes: "Ready for Tier-5 badge upon residential clearance.",
+        automatedCheck: "Human cooperative administrator approval required."
+      }
+    ],
 
     aadhaarMasked: "XXXX-XXXX-8821",
     identityDocType: "Government Aadhaar Card (Masked)",
@@ -422,6 +592,76 @@ const INITIAL_KYC_WORKERS: DetailedKycWorker[] = [
     riskLevel: "MEDIUM",
     recommendedDecision: "NEEDS_REVIEW",
     riskNote: "⚠ Provisional cooperative membership: Confirmation letter from society president required.",
+    serviceRadius: "10 km radius (Panchkula & Zirakpur)",
+    availability: "Available for Site Visits",
+    totalJobs: 174,
+    rating: 4.88,
+    languagesSpoken: ["Punjabi", "Hindi"],
+    secondarySkills: ["Granite Countertops", "Terrace Waterproofing", "Vitrified Tile Repair"],
+    intelligentFlags: [
+      {
+        type: "YELLOW",
+        label: "Provisional Membership Confirmation Needed",
+        details: "Requires signed letter from Panchkula Cooperative Sub-Center president."
+      },
+      {
+        type: "GREEN",
+        label: "CSDCI Masonry Certificate Valid",
+        details: "Construction Skill Development Council certificate valid until August 2027."
+      }
+    ],
+    verificationLevels: [
+      {
+        level: 1,
+        title: "Identity Verification",
+        subtitle: "Aadhaar Match & Verification",
+        status: "PENDING",
+        verifiedBy: "Pending Inspector Review",
+        date: "Yesterday, 02:00 PM",
+        notes: "Identity card uploaded; photo match pending inspection.",
+        automatedCheck: "Document consistency check completed successfully."
+      },
+      {
+        level: 2,
+        title: "Personal Information Verification",
+        subtitle: "Address & Mobile Verification",
+        status: "VERIFIED",
+        verifiedBy: "Inspector Balwinder Singh",
+        date: "Yesterday, 02:00 PM",
+        notes: "Address is within Panchkula cooperative sector.",
+        automatedCheck: "Pincode jurisdiction validated."
+      },
+      {
+        level: 3,
+        title: "Cooperative Membership Verification",
+        subtitle: "Provisional Membership Status",
+        status: "REQUIRES_REVIEW",
+        verifiedBy: "Pending Sub-Center President",
+        date: "Yesterday, 02:00 PM",
+        notes: "Official confirmation letter from society president required.",
+        automatedCheck: "Provisional society ID recorded."
+      },
+      {
+        level: 4,
+        title: "Trade Skill & Certification",
+        subtitle: "CSDCI Level 2 Masonry Certificate",
+        status: "PENDING",
+        verifiedBy: "Technical Evaluator",
+        date: "Yesterday, 02:00 PM",
+        notes: "Certificate uploaded; practical experience verified over 12+ years.",
+        automatedCheck: "CSDCI certification format validated."
+      },
+      {
+        level: 5,
+        title: "Final Cooperative Approval",
+        subtitle: "Cooperative Admin Physical Sign-Off",
+        status: "PENDING",
+        verifiedBy: "Authorized Cooperative Admin",
+        date: "Awaiting Levels 1, 3, 4",
+        notes: "Final Tier-5 approval pending clearance.",
+        automatedCheck: "Human cooperative administrator approval required."
+      }
+    ],
 
     aadhaarMasked: "XXXX-XXXX-1980",
     identityDocType: "Government Aadhaar Card (Masked)",
