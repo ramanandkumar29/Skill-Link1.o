@@ -29,7 +29,7 @@ export default function LexiChat({ onBookWorker, onSelectService }: LexiChatProp
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(false); // Auto speech OFF by default
   const [voiceLang, setVoiceLang] = useState<VoiceLanguage>("hi-IN");
   const [interimText, setInterimText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);

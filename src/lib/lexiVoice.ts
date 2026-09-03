@@ -21,11 +21,24 @@ class LexiVoiceManager {
   private currentLanguage: VoiceLanguage = "hi-IN";
   private isListeningState: boolean = false;
   private isSpeakingState: boolean = false;
-  private voiceEnabled: boolean = true;
+  private voiceEnabled: boolean = false; // Auto speech OFF by default
   private activeUtterance: SpeechSynthesisUtterance | null = null;
+  private availableVoices: SpeechSynthesisVoice[] = [];
 
   constructor() {
     this.initRecognition();
+    this.initVoices();
+  }
+
+  private initVoices() {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const loadVoices = () => {
+      this.availableVoices = window.speechSynthesis.getVoices();
+    };
+    loadVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
   }
 
   /**
@@ -192,15 +205,22 @@ class LexiVoiceManager {
    */
   public speak(
     text: string,
-    options?: { onStart?: () => void; onEnd?: () => void; onError?: () => void } | VoiceLanguage
+    options?: { onStart?: () => void; onEnd?: () => void; onError?: () => void; force?: boolean } | VoiceLanguage
   ) {
-    if (!this.voiceEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       return;
     }
 
     const opts = typeof options === "object" ? options : {};
     const explicitLang = typeof options === "string" ? options : undefined;
 
+    // Only speak if voice is enabled or user explicitly triggered Listen (force=true or explicitLang passed)
+    const isExplicitTrigger = !!opts.force || !!explicitLang;
+    if (!this.voiceEnabled && !isExplicitTrigger) {
+      return;
+    }
+
+    // Cancel any ongoing speech immediately to prevent overlap
     this.stopSpeaking();
 
     const cleanText = this.cleanTextForSpeech(text);
@@ -223,7 +243,7 @@ class LexiVoiceManager {
     utterance.pitch = 1.05;
 
     // Select suitable female assistant voice if available
-    const voices = window.speechSynthesis.getVoices();
+    const voices = this.availableVoices.length > 0 ? this.availableVoices : window.speechSynthesis.getVoices();
     const preferredVoice = voices.find(
       (v) =>
         (isHindi && (v.lang.includes("hi") || v.name.includes("Hindi") || v.name.includes("India"))) ||

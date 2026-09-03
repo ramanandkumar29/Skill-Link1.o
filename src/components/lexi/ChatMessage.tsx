@@ -40,6 +40,7 @@ export default function ChatMessage({
   const [isLocating, setIsLocating] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [manualArea, setManualArea] = useState("");
+  const [feedbackState, setFeedbackState] = useState<"helpful" | "not_helpful" | null>(null);
 
   const handleGetGPSLocation = () => {
     if (!navigator.geolocation) {
@@ -147,51 +148,61 @@ export default function ChatMessage({
               <div className="flex items-center gap-3">
                 {/* Helpful Feedback Buttons */}
                 <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <span>Helpful?</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fetch("/api/lexi/feedback", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          messageId: message.id,
-                          response: message.content,
-                          feedback: "helpful",
-                        }),
-                      }).catch(() => {});
-                      alert("Thanks for your feedback! 👍");
-                    }}
-                    className="hover:scale-125 transition-transform"
-                    title="Helpful"
-                  >
-                    👍
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fetch("/api/lexi/feedback", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          messageId: message.id,
-                          response: message.content,
-                          feedback: "not_helpful",
-                        }),
-                      }).catch(() => {});
-                      alert("Feedback recorded. We will improve LEXI's accuracy! 👎");
-                    }}
-                    className="hover:scale-125 transition-transform"
-                    title="Not Helpful"
-                  >
-                    👎
-                  </button>
+                  {feedbackState ? (
+                    <span className="text-emerald-600 font-medium">
+                      {feedbackState === "helpful" ? "Thanks! 👍" : "Feedback noted 👎"}
+                    </span>
+                  ) : (
+                    <>
+                      <span>Helpful?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFeedbackState("helpful");
+                          fetch("/api/lexi/feedback", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              messageId: message.id,
+                              response: message.content,
+                              feedback: "helpful",
+                              serviceIdentified: message.structuredAnalysis?.service,
+                            }),
+                          }).catch(() => {});
+                        }}
+                        className="hover:scale-125 transition-transform"
+                        title="Helpful"
+                      >
+                        👍
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFeedbackState("not_helpful");
+                          fetch("/api/lexi/feedback", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              messageId: message.id,
+                              response: message.content,
+                              feedback: "not_helpful",
+                              serviceIdentified: message.structuredAnalysis?.service,
+                            }),
+                          }).catch(() => {});
+                        }}
+                        className="hover:scale-125 transition-transform"
+                        title="Not Helpful"
+                      >
+                        👎
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 {message.content && (
                   <button
                     type="button"
-                    onClick={() => lexiVoice.speak(message.content)}
+                    onClick={() => lexiVoice.speak(message.content, { force: true })}
                     className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md transition-colors"
                     title="Listen to Lexi voice audio"
                   >

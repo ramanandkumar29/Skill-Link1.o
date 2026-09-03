@@ -435,3 +435,44 @@ CREATE POLICY "Participants view kyc audit"
             AND profiles.role IN ('cooperative_admin', 'super_admin')
         )
     );
+
+-- ==============================================================================
+-- 10. AI QUALITY FEEDBACK AUDIT TABLE
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.ai_feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message_id TEXT,
+    query TEXT,
+    response TEXT,
+    feedback TEXT NOT NULL, -- 'helpful' | 'not_helpful'
+    reason TEXT,
+    service_identified TEXT,
+    user_language TEXT DEFAULT 'hinglish',
+    user_role TEXT DEFAULT 'customer',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_feedback_feedback ON public.ai_feedback(feedback);
+CREATE INDEX IF NOT EXISTS idx_ai_feedback_service ON public.ai_feedback(service_identified);
+
+ALTER TABLE public.ai_feedback ENABLE ROW LEVEL SECURITY;
+
+-- Allow authenticated and anonymous users to insert feedback
+DROP POLICY IF EXISTS "Anyone can submit feedback" ON public.ai_feedback;
+CREATE POLICY "Anyone can submit feedback"
+    ON public.ai_feedback FOR INSERT
+    TO public
+    WITH CHECK (true);
+
+-- Only admins can read AI feedback metrics
+DROP POLICY IF EXISTS "Admins can view feedback" ON public.ai_feedback;
+CREATE POLICY "Admins can view feedback"
+    ON public.ai_feedback FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
