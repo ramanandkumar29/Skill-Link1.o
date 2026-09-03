@@ -17,6 +17,7 @@ export interface KycDocument {
   fileType: "image/jpeg" | "application/pdf";
   status: "PENDING" | "VERIFIED" | "REJECTED" | "REQUIRES_REVIEW";
   rejectionReason?: string;
+  verificationNotes?: string;
   uploadedAt: string;
   verifiedAt?: string;
   verifiedBy?: string;
@@ -26,8 +27,11 @@ export interface KycChecklistItem {
   id: string;
   category: "IDENTITY" | "COOPERATIVE" | "SKILL" | "ADDRESS";
   label: string;
+  title?: string;
+  description?: string;
   status: "VERIFIED" | "PENDING" | "REQUIRES_REVIEW" | "REJECTED" | "MISSING";
   note?: string;
+  lastUpdated?: string;
 }
 
 export interface KycAuditLog {
@@ -82,6 +86,19 @@ export interface DetailedKycWorker {
   certificateExpiryDate?: string;
   skillVerificationStatus: "VERIFIED" | "PENDING" | "REQUIRES_REVIEW";
 
+  pincode?: string;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH";
+  recommendedDecision?: "APPROVE" | "NEEDS_REVIEW" | "REJECT";
+  riskNote?: string;
+  lexiSummary?: {
+    identityStatus: string;
+    membershipStatus: string;
+    tradeStatus: string;
+    riskLevel: "LOW" | "MEDIUM" | "HIGH";
+    recommendation: string;
+    keyObservation: string;
+  };
+
   // Priority & Status
   priority: "HIGH" | "MEDIUM" | "NORMAL";
   priorityReason?: string;
@@ -95,6 +112,40 @@ export interface DetailedKycWorker {
   checklist: KycChecklistItem[];
   auditTimeline: KycAuditLog[];
   warnings: string[];
+}
+
+export function generateLexiKycAuditSummary(worker: DetailedKycWorker) {
+  const verifiedDocs = worker.documents.filter((d) => d.status === "VERIFIED").length;
+  const totalDocs = worker.documents.length || 1;
+  const verifiedChecks = worker.checklist.filter((c) => c.status === "VERIFIED").length;
+  const totalChecks = worker.checklist.length || 1;
+  const progress = Math.round((verifiedChecks / totalChecks) * 100);
+
+  let riskLevel: "LOW" | "MEDIUM" | "HIGH" = worker.riskLevel || "LOW";
+  if (worker.membershipStatus === "PROVISIONAL" || worker.checklist.some((c) => c.status === "REQUIRES_REVIEW")) {
+    riskLevel = "MEDIUM";
+  }
+  if (worker.documents.some((d) => d.status === "REJECTED")) {
+    riskLevel = "HIGH";
+  }
+
+  let recommendation = "Request verification of trade certificate and society ledger before Tier-5 approval.";
+  if (progress === 100 && verifiedDocs === totalDocs) {
+    recommendation = "All 5-tier verification criteria satisfied. Ready for Tier-5 Cooperative Approval.";
+  } else if (riskLevel === "HIGH") {
+    recommendation = "Reject or request re-upload of flagged documentation.";
+  } else if (worker.skillVerificationStatus === "PENDING") {
+    recommendation = `Manually inspect ${worker.certificationAuthority} registry records before final Tier-5 approval.`;
+  }
+
+  return {
+    identityStatus: worker.identityStatus === "VERIFIED" ? "Verified (Aadhaar token and photo match physical society roster)" : "Pending Identity Check",
+    membershipStatus: worker.membershipStatus === "ACTIVE" ? `Verified (${worker.cooperativeSociety})` : "Provisional Membership (Confirmation Needed)",
+    tradeStatus: worker.skillVerificationStatus === "VERIFIED" ? "Verified Trade Credentials" : `Manual Verification Required (${worker.certificateName})`,
+    riskLevel,
+    recommendation,
+    keyObservation: `${worker.experience} experience in ${worker.occupation}. ${verifiedDocs}/${totalDocs} supporting documents verified.`,
+  };
 }
 
 export const REJECTION_REASONS = [
@@ -123,6 +174,10 @@ const INITIAL_KYC_WORKERS: DetailedKycWorker[] = [
     district: "SAS Nagar",
     state: "Punjab",
     maskedAddress: "Phase 7 Industrial Area, Sector 70 (Full details protected)",
+    pincode: "160071",
+    riskLevel: "LOW",
+    recommendedDecision: "NEEDS_REVIEW",
+    riskNote: "⚠ Certification requires manual verification. ITI registration number could not be automatically verified against online portal.",
 
     aadhaarMasked: "XXXX-XXXX-4912",
     identityDocType: "Government Aadhaar Card (Masked)",
@@ -248,6 +303,10 @@ const INITIAL_KYC_WORKERS: DetailedKycWorker[] = [
     district: "Chandigarh UT",
     state: "Chandigarh",
     maskedAddress: "Sector 44-C Housing Board (Full details protected)",
+    pincode: "160044",
+    riskLevel: "LOW",
+    recommendedDecision: "NEEDS_REVIEW",
+    riskNote: "⚠ Address certificate is a photographed rent agreement; society secretary physical confirmation recommended.",
 
     aadhaarMasked: "XXXX-XXXX-8821",
     identityDocType: "Government Aadhaar Card (Masked)",
@@ -359,6 +418,10 @@ const INITIAL_KYC_WORKERS: DetailedKycWorker[] = [
     district: "Panchkula",
     state: "Haryana",
     maskedAddress: "Sector 14 Industrial Colony (Full details protected)",
+    pincode: "134109",
+    riskLevel: "MEDIUM",
+    recommendedDecision: "NEEDS_REVIEW",
+    riskNote: "⚠ Provisional cooperative membership: Confirmation letter from society president required.",
 
     aadhaarMasked: "XXXX-XXXX-1980",
     identityDocType: "Government Aadhaar Card (Masked)",

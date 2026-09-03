@@ -122,15 +122,76 @@ function runKycTests() {
 
   if (hasWorkerDocsTable && hasAdminPolicy && hasWorkerSelfPolicy) {
     passed++;
-    console.log(`✅ [TEST 7/7] PASS: Database schema & RLS policies for worker_documents and kyc_audit_logs verified`);
+    console.log(`✅ [TEST 7/12] PASS: Database schema & RLS policies for worker_documents and kyc_audit_logs verified`);
   } else {
-    console.log("❌ [TEST 7/7] FAIL: Migration schema check failed");
+    console.log("❌ [TEST 7/12] FAIL: Migration schema check failed");
   }
 
-  const accuracy = ((passed / total) * 100).toFixed(1);
+  // Test 8: Contextual AI Advisory Summary Generation
+  const { generateLexiKycAuditSummary } = require("../src/lib/kycVerificationService.ts");
+  const aiSummary = generateLexiKycAuditSummary(dharmendra);
+  if (aiSummary && aiSummary.riskLevel && aiSummary.recommendation && aiSummary.identityStatus) {
+    passed++;
+    console.log(`✅ [TEST 8/12] PASS: LEXI Contextual AI Summary Generated (Risk: ${aiSummary.riskLevel}, Status: ${aiSummary.identityStatus})`);
+  } else {
+    console.log("❌ [TEST 8/12] FAIL: AI audit summary generation failed");
+  }
+
+  // Test 9: Risk Level & Decision Recommendation Evaluation
+  const harnek = workers.find((w) => w.id === "kyc-103");
+  const harnekAiSummary = generateLexiKycAuditSummary(harnek);
+  if (harnekAiSummary.riskLevel === "MEDIUM" && harnek.membershipStatus === "PROVISIONAL") {
+    passed++;
+    console.log(`✅ [TEST 9/12] PASS: Provisional Membership correctly flagged as MEDIUM Risk`);
+  } else {
+    console.log("❌ [TEST 9/12] FAIL: Risk level evaluation failed");
+  }
+
+  // Test 10: Sensitive Identity & Address Obfuscation Shield
+  const hasUnmaskedAadhaar = workers.some((w) => /^\d{12}$/.test(w.aadhaarMasked));
+  const hasMaskedAddresses = workers.every((w) => w.maskedAddress.includes("protected") || w.maskedAddress.includes("Full"));
+  if (!hasUnmaskedAadhaar && hasMaskedAddresses) {
+    passed++;
+    console.log(`✅ [TEST 10/12] PASS: Complete Aadhaar and exact residence protected with masking`);
+  } else {
+    console.log("❌ [TEST 10/12] FAIL: Aadhaar/address masking failed");
+  }
+
+  // Test 11: Modal Layout & Sticky Footer Action Integrity
+  const drawerCode = fs.readFileSync(path.join(__dirname, "../src/components/WorkerVerificationDrawer.tsx"), "utf8");
+  const hasModalSizing = drawerCode.includes("max-w-5xl") || drawerCode.includes("max-w-6xl");
+  const hasStickyFooter = drawerCode.includes("border-t border-slate-200") && drawerCode.includes("shrink-0");
+  const has5Tabs = drawerCode.includes("OVERVIEW") && drawerCode.includes("PERSONAL") && drawerCode.includes("SKILLS") && drawerCode.includes("DOCUMENTS") && drawerCode.includes("TIMELINE");
+
+  if (hasModalSizing && hasStickyFooter && has5Tabs) {
+    passed++;
+    console.log(`✅ [TEST 11/12] PASS: Responsive Centered Modal Layout, Sticky Action Bar & 5 Tabs Verified`);
+  } else {
+    console.log("❌ [TEST 11/12] FAIL: Modal layout checks failed");
+  }
+
+  // Test 12: LEXI Zero-Overlap Event Contract
+  const hasModalOpenEvent = drawerCode.includes("skill-link-modal-open") && drawerCode.includes("skill-link-modal-close");
+  const lexiChatCode = fs.readFileSync(path.join(__dirname, "../src/components/lexi/LexiChat.tsx"), "utf8");
+  const lexiHidesOnModal = lexiChatCode.includes("skill-link-modal-open") && lexiChatCode.includes("!isModalActive");
+
+  if (hasModalOpenEvent && lexiHidesOnModal) {
+    passed++;
+    console.log(`✅ [TEST 12/12] PASS: Zero-Overlap Contract Verified (LEXI automatically hides when modal is open)`);
+  } else {
+    console.log("❌ [TEST 12/12] FAIL: LEXI modal event integration failed");
+  }
+
+  const accuracy = ((passed / 12) * 100).toFixed(1);
   console.log("==================================================");
-  console.log(`KYC VERIFICATION TESTS: ${passed}/${total} Passed (${accuracy}% Success)`);
+  console.log(`KYC VERIFICATION TESTS: ${passed}/12 Passed (${accuracy}% Success)`);
   console.log("==================================================");
+
+  if (passed === 12) {
+    process.exit(0);
+  } else {
+    process.exit(1);
+  }
 }
 
 runKycTests();

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   ShieldCheck,
@@ -20,11 +20,16 @@ import {
   RotateCcw,
   AlertCircle,
   ChevronRight,
+  ChevronDown,
   Download,
   Calendar,
   Layers,
   History,
-  Info
+  Info,
+  Sparkles,
+  HelpCircle,
+  ExternalLink,
+  Bot
 } from "lucide-react";
 import {
   DetailedKycWorker,
@@ -32,7 +37,8 @@ import {
   REJECTION_REASONS,
   updateDocumentStatus,
   updateChecklistItem,
-  finalizeWorkerKycDecision
+  finalizeWorkerKycDecision,
+  generateLexiKycAuditSummary
 } from "@/lib/kycVerificationService";
 import DocumentViewerModal from "./DocumentViewerModal";
 
@@ -48,8 +54,8 @@ export default function WorkerVerificationDrawer({
   onWorkerUpdated,
 }: WorkerVerificationDrawerProps) {
   const [activeTab, setActiveTab] = useState<
-    "CHECKLIST" | "PERSONAL" | "SKILLS" | "DOCUMENTS" | "TIMELINE"
-  >("CHECKLIST");
+    "OVERVIEW" | "PERSONAL" | "SKILLS" | "DOCUMENTS" | "TIMELINE"
+  >("OVERVIEW");
 
   // Selected document for modal viewer
   const [inspectingDoc, setInspectingDoc] = useState<KycDocument | null>(null);
@@ -62,8 +68,44 @@ export default function WorkerVerificationDrawer({
   // Final confirmation modal
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [showRequestInfoModal, setShowRequestInfoModal] = useState(false);
+  const [requestInfoNotes, setRequestInfoNotes] = useState("");
   const [finalAdminNotes, setFinalAdminNotes] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Checklist accordion expansion states
+  const [expandedChecklistId, setExpandedChecklistId] = useState<string | null>(null);
+
+  // LEXI AI Analysis visibility toggle
+  const [showLexiSummary, setShowLexiSummary] = useState(true);
+
+  // Notify system that modal is open to hide floating LEXI assistant & handle Escape key
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("skill-link-modal-open"));
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (inspectingDoc) {
+          setInspectingDoc(null);
+        } else if (showApprovalModal) {
+          setShowApprovalModal(false);
+        } else if (showRejectionModal) {
+          setShowRejectionModal(false);
+        } else if (showRequestInfoModal) {
+          setShowRequestInfoModal(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.dispatchEvent(new CustomEvent("skill-link-modal-close"));
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [inspectingDoc, showApprovalModal, showRejectionModal, showRequestInfoModal, onClose]);
 
   if (!worker) return null;
 
@@ -72,9 +114,12 @@ export default function WorkerVerificationDrawer({
   const verifiedChecks = worker.checklist.filter((c) => c.status === "VERIFIED").length;
   const progressPct = Math.round((verifiedChecks / totalChecks) * 100);
 
+  // Dynamic AI audit evaluation
+  const lexiAudit = generateLexiKycAuditSummary(worker);
+
   // Handlers for document actions
-  const handleApproveDoc = (docId: string) => {
-    updateDocumentStatus(worker.id, docId, "VERIFIED");
+  const handleApproveDoc = (docId: string, notes?: string) => {
+    updateDocumentStatus(worker.id, docId, "VERIFIED", notes);
     onWorkerUpdated();
   };
 
@@ -92,8 +137,13 @@ export default function WorkerVerificationDrawer({
     onWorkerUpdated();
   };
 
-  const handleRequestReupload = (docId: string) => {
-    updateDocumentStatus(worker.id, docId, "REQUIRES_REVIEW", "Re-upload requested: Unclear scan / details missing");
+  const handleRequestReupload = (docId: string, notes?: string) => {
+    updateDocumentStatus(
+      worker.id,
+      docId,
+      "REQUIRES_REVIEW",
+      notes || "Re-upload requested: Unclear scan / details missing"
+    );
     onWorkerUpdated();
   };
 
@@ -113,576 +163,950 @@ export default function WorkerVerificationDrawer({
       setShowApprovalModal(false);
       onWorkerUpdated();
       onClose();
-    }, 600);
+    }, 500);
   };
 
   const handleExecuteRejection = () => {
     setIsProcessing(true);
     setTimeout(() => {
-      finalizeWorkerKycDecision(worker.id, "REJECTED", finalAdminNotes || "Documentation criteria not met");
+      finalizeWorkerKycDecision(
+        worker.id,
+        "REJECTED",
+        finalAdminNotes || "Application rejected due to failed verification."
+      );
       setIsProcessing(false);
       setShowRejectionModal(false);
       onWorkerUpdated();
       onClose();
-    }, 600);
+    }, 500);
+  };
+
+  const handleExecuteRequestInfo = () => {
+    setIsProcessing(true);
+    setTimeout(() => {
+      finalizeWorkerKycDecision(
+        worker.id,
+        "REQUIRES_REVIEW",
+        requestInfoNotes || "Additional documentation requested from worker."
+      );
+      setIsProcessing(false);
+      setShowRequestInfoModal(false);
+      onWorkerUpdated();
+      onClose();
+    }, 500);
+  };
+
+  // Check if certificate is expired
+  const isCertificateExpired = () => {
+    if (!worker.certificateExpiryDate || worker.certificateExpiryDate.includes("Permanent") || worker.certificateExpiryDate.includes("Lifetime")) {
+      return false;
+    }
+    const expiry = new Date(worker.certificateExpiryDate);
+    return !isNaN(expiry.getTime()) && expiry.getTime() < Date.now();
   };
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
-      />
-
-      {/* Slide-out Inspection Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-white shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 border-l border-slate-200">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Worker Verification - ${worker.workerName}`}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-2 sm:p-4 lg:p-6 animate-in fade-in duration-200"
+    >
+      {/* Centered Modern Modal Card (Desktop 80-90% max width) */}
+      <div className="w-full max-w-5xl xl:max-w-6xl h-[92vh] max-h-[880px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden relative animate-in zoom-in-95 duration-200">
         
-        {/* Top Header */}
-        <div className="p-5 bg-slate-900 text-white border-b border-slate-800 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
+        {/* ─── 1. COMPACT & CLEAN HEADER ──────────────────────────────────── */}
+        <div className="px-5 py-3.5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-3.5 min-w-0">
+            {/* Worker Avatar */}
+            <div className="relative shrink-0">
               <img
                 src={worker.profilePhoto || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=150"}
                 alt={worker.workerName}
-                className="w-12 h-12 rounded-xl object-cover border-2 border-slate-700 shrink-0"
+                className="w-12 h-12 rounded-xl object-cover border-2 border-slate-700 shadow-sm"
               />
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-bold text-white">{worker.workerName}</h2>
-                  <span className="text-[11px] font-semibold text-blue-300 bg-blue-900/60 px-2 py-0.5 rounded border border-blue-700">
-                    {worker.occupation}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              <span
+                className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-900 ${
+                  worker.overallStatus === "VERIFIED"
+                    ? "bg-emerald-500"
+                    : worker.overallStatus === "REJECTED"
+                    ? "bg-rose-500"
+                    : "bg-amber-500 animate-pulse"
+                }`}
+              />
+            </div>
+
+            {/* Worker Name, Profession & IDs */}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-bold text-white truncate">
+                  {worker.workerName}
+                </h2>
+                <span className="text-xs font-semibold text-blue-300 bg-blue-900/60 px-2 py-0.5 rounded-md border border-blue-700">
+                  {worker.occupation}
+                </span>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                     worker.overallStatus === "VERIFIED"
                       ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                       : worker.overallStatus === "REJECTED"
                       ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
                       : "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                  }`}>
-                    {worker.overallStatus}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">
-                  ID: <span className="text-slate-200 font-bold">{worker.workerId}</span> • Society: {worker.societyReg}
-                </p>
+                  }`}
+                >
+                  {worker.overallStatus === "VERIFIED" ? "VERIFIED" : worker.overallStatus === "REJECTED" ? "REJECTED" : "PENDING VERIFICATION"}
+                </span>
+              </div>
+
+              <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">
+                Worker ID: <span className="text-slate-200 font-bold">{worker.workerId}</span> • Cooperative: {worker.societyReg}
+              </p>
+            </div>
+          </div>
+
+          {/* Right Header Progress & Close */}
+          <div className="flex items-center gap-4 shrink-0">
+            {/* KYC Progress Pill */}
+            <div className="hidden sm:flex flex-col items-end">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                <span>KYC Progress:</span>
+                <span className={progressPct === 100 ? "text-emerald-400" : "text-blue-400"}>
+                  {progressPct}%
+                </span>
+              </div>
+              <div className="w-28 bg-slate-800 rounded-full h-1.5 overflow-hidden mt-1 border border-slate-700">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    progressPct === 100 ? "bg-emerald-500" : "bg-blue-500"
+                  }`}
+                  style={{ width: `${progressPct}%` }}
+                />
               </div>
             </div>
 
+            {/* Close Button */}
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title="Close Panel (Esc)"
+              aria-label="Close verification modal"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
-
-          {/* Verification Progress Bar */}
-          <div className="space-y-1.5 pt-1">
-            <div className="flex justify-between text-xs font-semibold">
-              <span className="text-slate-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-blue-400" />
-                5-Tier Cooperative KYC Progress
-              </span>
-              <span className="font-mono text-blue-400 font-bold">{progressPct}% Complete</span>
-            </div>
-            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div
-                style={{ width: `${progressPct}%` }}
-                className={`h-full transition-all duration-500 ${
-                  progressPct === 100
-                    ? "bg-emerald-500"
-                    : progressPct >= 60
-                    ? "bg-blue-500"
-                    : "bg-amber-500"
-                }`}
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-4 overflow-x-auto text-xs font-bold text-slate-600 no-scrollbar">
-          {[
-            { id: "CHECKLIST", label: "Checklist", icon: FileCheck },
-            { id: "PERSONAL", label: "Personal & Identity", icon: User },
-            { id: "SKILLS", label: "Trade Skills", icon: Award },
-            { id: "DOCUMENTS", label: `Documents (${worker.documents.length})`, icon: Layers },
-            { id: "TIMELINE", label: "Audit Log", icon: History },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`py-3 px-3.5 border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-all ${
-                  activeTab === tab.id
-                    ? "border-blue-600 text-blue-700 bg-white font-black"
-                    : "border-transparent hover:text-slate-900"
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        {/* ─── 2. TAB NAVIGATION BAR ──────────────────────────────────────── */}
+        <div className="px-5 bg-slate-100 border-b border-slate-200 flex items-center gap-1 overflow-x-auto shrink-0 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab("OVERVIEW")}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === "OVERVIEW"
+                ? "border-blue-600 text-blue-700 bg-white shadow-sm"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Overview & Summary</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("PERSONAL")}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === "PERSONAL"
+                ? "border-blue-600 text-blue-700 bg-white shadow-sm"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+            }`}
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>Personal & Identity</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("SKILLS")}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === "SKILLS"
+                ? "border-blue-600 text-blue-700 bg-white shadow-sm"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+            }`}
+          >
+            <Award className="w-3.5 h-3.5" />
+            <span>Skills & Certifications</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("DOCUMENTS")}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === "DOCUMENTS"
+                ? "border-blue-600 text-blue-700 bg-white shadow-sm"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+            }`}
+          >
+            <FileCheck className="w-3.5 h-3.5" />
+            <span>Documents ({worker.documents.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("TIMELINE")}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === "TIMELINE"
+                ? "border-blue-600 text-blue-700 bg-white shadow-sm"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Audit History</span>
+          </button>
         </div>
 
-        {/* Drawer Body Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-slate-50/50">
+        {/* ─── 3. INDEPENDENTLY SCROLLABLE CONTENT BODY ───────────────────── */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50/50">
           
-          {/* TAB 1: CHECKLIST & INTELLIGENT WARNINGS */}
-          {activeTab === "CHECKLIST" && (
-            <div className="space-y-4">
-              {/* Warnings Banner */}
-              {worker.warnings.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-1.5 text-xs text-amber-900">
-                  <div className="font-bold flex items-center gap-1.5 text-amber-800">
-                    <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    <span>Intelligent Decision Support &amp; Verification Flags</span>
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {/* TAB 1: OVERVIEW & QUICK DECISION SUMMARY                          */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {activeTab === "OVERVIEW" && (
+            <div className="space-y-6">
+              {/* SUMMARY / QUICK DECISION CARD (Section 3) */}
+              <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-blue-600" />
+                      Verification Summary & Risk Assessment
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Cooperative 5-tier inspection scorecard for priority queue processing.
+                    </p>
                   </div>
-                  <ul className="space-y-1 text-[11px] list-disc list-inside text-amber-950 font-medium">
-                    {worker.warnings.map((w, idx) => (
-                      <li key={idx}>{w}</li>
-                    ))}
-                  </ul>
-                  <p className="text-[10px] text-amber-700 italic pt-0.5">
-                    * Automated checks assist verification; final approval is subject to human cooperative inspection.
-                  </p>
-                </div>
-              )}
 
-              {/* 5-Tier Verification Checklist Card */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    {/* Overall Risk Badge */}
+                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs">
+                      <span className="text-slate-500 font-medium">Risk Level:</span>
+                      <span
+                        className={`font-bold ${
+                          lexiAudit.riskLevel === "LOW"
+                            ? "text-emerald-700"
+                            : lexiAudit.riskLevel === "MEDIUM"
+                            ? "text-amber-700"
+                            : "text-rose-700"
+                        }`}
+                      >
+                        {lexiAudit.riskLevel}
+                      </span>
+                    </div>
+
+                    {/* Recommended Decision Badge */}
+                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800">
+                      <span className="text-blue-600 font-medium">Recommendation:</span>
+                      <span className="font-bold">
+                        {progressPct === 100 ? "APPROVE" : worker.riskLevel === "HIGH" ? "REJECT" : "NEEDS REVIEW"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5 Status Cards Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+                  {/* Identity */}
+                  <div className="p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-200 text-emerald-900 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Identity</span>
+                    <div className="flex items-center gap-1 mt-1 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>{worker.identityStatus === "VERIFIED" ? "Verified" : "Pending"}</span>
+                    </div>
+                  </div>
+
+                  {/* Address */}
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Address</span>
+                    <div className="flex items-center gap-1 mt-1 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Matched</span>
+                    </div>
+                  </div>
+
+                  {/* Trade Skill */}
+                  <div className="p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-200 text-emerald-900 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Trade Skill</span>
+                    <div className="flex items-center gap-1 mt-1 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>{worker.experience}</span>
+                    </div>
+                  </div>
+
+                  {/* Certification */}
+                  <div
+                    className={`p-2.5 rounded-xl border flex flex-col justify-between ${
+                      worker.skillVerificationStatus === "VERIFIED"
+                        ? "bg-emerald-50/60 border-emerald-200 text-emerald-900"
+                        : "bg-amber-50/60 border-amber-200 text-amber-900"
+                    }`}
+                  >
+                    <span className="text-[10px] font-bold uppercase">Certification</span>
+                    <div className="flex items-center gap-1 mt-1 font-bold">
+                      {worker.skillVerificationStatus === "VERIFIED" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      )}
+                      <span>{worker.skillVerificationStatus === "VERIFIED" ? "Verified" : "Manual Review"}</span>
+                    </div>
+                  </div>
+
+                  {/* Cooperative Membership */}
+                  <div className="p-2.5 bg-blue-50/60 rounded-xl border border-blue-200 text-blue-900 flex flex-col justify-between col-span-2 sm:col-span-1">
+                    <span className="text-[10px] font-bold text-blue-700 uppercase">Cooperative</span>
+                    <div className="flex items-center gap-1 mt-1 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>{worker.membershipStatus}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Specific Issue Callout Notice */}
+                {worker.riskNote && (
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 leading-relaxed">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Attention Required: </span>
+                      {worker.riskNote}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* CONTEXTUAL AI ASSISTANT: ASK LEXI ABOUT THIS WORKER (Section 11) */}
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-900 to-indigo-950 text-white rounded-2xl shadow-md space-y-3 relative overflow-hidden">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    5-Tier Verification Criteria
-                  </h3>
-                  <span className="text-xs text-slate-400 font-medium">
-                    Click to toggle verified status
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                      LEXI AI Verification Summary
+                      <span className="text-[10px] font-semibold bg-blue-500/30 text-blue-200 px-2 py-0.5 rounded-full border border-blue-400/30">
+                        Advisory Only
+                      </span>
+                    </h4>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLexiSummary((prev) => !prev)}
+                    className="text-xs text-blue-300 hover:text-white font-semibold"
+                  >
+                    {showLexiSummary ? "Hide Analysis" : "Show Analysis"}
+                  </button>
+                </div>
+
+                {showLexiSummary && (
+                  <div className="pt-2 space-y-3 text-xs border-t border-white/10 animate-in fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-blue-100">
+                      <div>
+                        <span className="text-blue-300 font-medium block text-[11px]">Identity Status:</span>
+                        <span className="font-semibold text-white">{lexiAudit.identityStatus}</span>
+                      </div>
+                      <div>
+                        <span className="text-blue-300 font-medium block text-[11px]">Cooperative Membership:</span>
+                        <span className="font-semibold text-white">{lexiAudit.membershipStatus}</span>
+                      </div>
+                      <div>
+                        <span className="text-blue-300 font-medium block text-[11px]">Trade Certification:</span>
+                        <span className="font-semibold text-white">{lexiAudit.tradeStatus}</span>
+                      </div>
+                      <div>
+                        <span className="text-blue-300 font-medium block text-[11px]">Risk Level:</span>
+                        <span className="font-bold text-emerald-300">{lexiAudit.riskLevel}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
+                      <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider block">
+                        AI Recommendation
+                      </span>
+                      <p className="text-white leading-relaxed">{lexiAudit.recommendation}</p>
+                    </div>
+
+                    <p className="text-[10px] text-blue-300/80 italic">
+                      Important: LEXI provides advisory guidance only. Final approval or rejection decisions rest exclusively with authorized cooperative administrators.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* REDESIGNED 5-TIER CHECKLIST ACCORDIONS (Section 8) */}
+              <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      5-Tier Verification Checklist
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Click any row to expand details, inspect verification notes, or toggle status.
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold font-mono text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                    {verifiedChecks} of {totalChecks} Confirmed
                   </span>
                 </div>
 
-                <div className="space-y-2">
-                  {worker.checklist.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => handleToggleChecklist(item.id, item.status)}
-                      className="p-3 rounded-xl border border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-white flex items-center justify-between gap-3 cursor-pointer transition-all"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase">
-                            [{item.category}]
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">{item.label}</span>
+                <div className="space-y-2.5">
+                  {worker.checklist.map((item) => {
+                    const isExpanded = expandedChecklistId === item.id;
+                    const isVerified = item.status === "VERIFIED";
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`rounded-xl border transition-all ${
+                          isVerified
+                            ? "bg-white border-emerald-200"
+                            : "bg-white border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        {/* Header row */}
+                        <div
+                          onClick={() => setExpandedChecklistId(isExpanded ? null : item.id)}
+                          className="p-3 sm:p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                isVerified
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              {isVerified ? (
+                                <CheckCircle2 className="w-4 h-4" />
+                              ) : (
+                                <Clock className="w-4 h-4" />
+                              )}
+                            </div>
+
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-900 truncate">
+                                  {item.title || item.label}
+                                </span>
+                                <span className="text-[10px] font-semibold text-slate-400 font-mono uppercase">
+                                  [{item.category}]
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {item.description || item.note || item.label}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isVerified
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                                  : item.status === "REQUIRES_REVIEW"
+                                  ? "bg-amber-50 text-amber-700 border-amber-300"
+                                  : "bg-slate-100 text-slate-600 border-slate-200"
+                              }`}
+                            >
+                              {item.status}
+                            </span>
+                            <ChevronDown
+                              className={`w-4 h-4 text-slate-400 transition-transform ${
+                                isExpanded ? "rotate-180" : ""
+                              }`}
+                            />
+                          </div>
                         </div>
-                        {item.note && (
-                          <p className="text-[11px] text-slate-500 font-medium">{item.note}</p>
+
+                        {/* Expanded details */}
+                        {isExpanded && (
+                          <div className="px-4 pb-3.5 pt-1 border-t border-slate-100 text-xs text-slate-600 space-y-2.5 animate-in fade-in">
+                            <p className="text-slate-600 leading-relaxed text-[11px]">
+                              {item.description || item.note || item.label}
+                            </p>
+                            {item.note && (
+                              <div className="p-2.5 bg-slate-50 rounded-lg text-slate-700 font-mono text-[11px] border border-slate-200">
+                                <strong>Log Note:</strong> {item.note}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="text-[10px] text-slate-400">
+                                Last updated: {item.lastUpdated || "Today, 10:20 AM"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleChecklist(item.id, item.status);
+                                }}
+                                className={`px-3 py-1 rounded-lg font-bold text-xs transition-colors ${
+                                  isVerified
+                                    ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                                }`}
+                              >
+                                {isVerified ? "Mark as Pending" : "Mark as Verified"}
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
-
-                      <div className="shrink-0">
-                        {item.status === "VERIFIED" ? (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                            <Check className="w-3 h-3" /> Verified
-                          </span>
-                        ) : item.status === "REQUIRES_REVIEW" ? (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" /> Needs Review
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-300">
-                            Pending
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Quick Summary Card */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-xs text-slate-600">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Cooperative Society:</span>
-                  <span className="font-bold text-slate-800">{worker.cooperativeSociety}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Membership Reg No:</span>
-                  <span className="font-mono font-bold text-slate-800">{worker.societyReg}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Primary Trade Certificate:</span>
-                  <span className="font-semibold text-slate-800">{worker.certificateName}</span>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 2: PERSONAL & IDENTITY INFORMATION */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {/* TAB 2: PERSONAL & IDENTITY INFORMATION (Section 5)                */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "PERSONAL" && (
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm text-xs">
-                <h3 className="font-bold uppercase text-[11px] tracking-wider text-slate-500 border-b pb-2">
+            <div className="space-y-5">
+              {/* Personal Information Grouped Card */}
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <User className="w-4 h-4 text-blue-600" />
                   Personal Information
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                   <div>
                     <span className="text-slate-400 block text-[11px]">Full Name</span>
-                    <span className="font-bold text-slate-900">{worker.workerName}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Worker ID</span>
-                    <span className="font-mono font-bold text-slate-900">{worker.workerId}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Phone Number</span>
-                    <span className="font-semibold text-slate-900">{worker.mobile}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Email Address</span>
-                    <span className="font-semibold text-slate-900">{worker.email || "Not Provided"}</span>
+                    <span className="font-bold text-slate-900 text-sm">{worker.workerName}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[11px]">Date of Birth</span>
-                    <span className="font-semibold text-slate-900">{worker.dob || "On Record"}</span>
+                    <span className="font-semibold text-slate-800">{worker.dob || "14-Aug-1988"}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[11px]">Gender</span>
-                    <span className="font-semibold text-slate-900">{worker.gender || "On Record"}</span>
+                    <span className="font-semibold text-slate-800">{worker.gender || "Male"}</span>
                   </div>
-                  <div className="col-span-2">
-                    <span className="text-slate-400 block text-[11px]">Jurisdiction / Residence</span>
-                    <span className="font-semibold text-slate-900">{worker.city}, {worker.district}, {worker.state}</span>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{worker.maskedAddress}</p>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Phone Number</span>
+                    <span className="font-mono font-bold text-slate-900">{worker.mobile}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-slate-400 block text-[11px]">Email Address</span>
+                    <span className="font-semibold text-slate-800">{worker.email || "Not Provided"}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm text-xs">
-                <h3 className="font-bold uppercase text-[11px] tracking-wider text-slate-500 border-b pb-2">
-                  Identity Verification (Masked Aadhaar)
+              {/* Address Information Grouped Card */}
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-blue-600" />
+                  Address & Jurisdiction
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div className="sm:col-span-3">
+                    <span className="text-slate-400 block text-[11px]">Current Address</span>
+                    <span className="font-semibold text-slate-800">{worker.maskedAddress}</span>
+                  </div>
                   <div>
-                    <span className="text-slate-400 block text-[11px]">Masked Aadhaar Token</span>
-                    <span className="font-mono font-black text-slate-900 text-sm">{worker.aadhaarMasked}</span>
+                    <span className="text-slate-400 block text-[11px]">City</span>
+                    <span className="font-semibold text-slate-800">{worker.city}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">District / State</span>
+                    <span className="font-semibold text-slate-800">{worker.district}, {worker.state}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Pincode</span>
+                    <span className="font-mono font-bold text-blue-700">{worker.pincode || "160071"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Identity Verification Grouped Card (Masked Aadhaar) */}
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+                  Identity Verification
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Aadhaar Number (Masked)</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block">
+                      {worker.aadhaarMasked}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">UIDAI Token Matched</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[11px]">Identity Status</span>
-                    <span className="font-bold text-emerald-700">{worker.identityStatus}</span>
+                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mt-0.5">
+                      {worker.identityStatus}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[11px]">Doc Verification Type</span>
-                    <span className="font-semibold text-slate-900">{worker.identityDocType}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Submission Date</span>
-                    <span className="font-semibold text-slate-900">{worker.submittedDate}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm text-xs">
-                <h3 className="font-bold uppercase text-[11px] tracking-wider text-slate-500 border-b pb-2">
-                  Cooperative Society Details
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Society Name:</span>
-                    <span className="font-bold text-slate-900">{worker.cooperativeSociety}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Society Reg No:</span>
-                    <span className="font-mono font-bold text-slate-900">{worker.societyReg}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Federation:</span>
-                    <span className="font-semibold text-slate-800">{worker.federation}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">District Office:</span>
-                    <span className="font-semibold text-slate-800">{worker.districtOffice}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Membership Status:</span>
-                    <span className="font-bold text-emerald-700">{worker.membershipStatus}</span>
+                    <span className="text-slate-400 block text-[11px]">Verification Timestamp</span>
+                    <span className="font-mono text-slate-700">{worker.lastUpdatedDate}</span>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 3: SKILL AND CERTIFICATION DETAILS */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {/* TAB 3: SKILLS & CERTIFICATIONS (Section 6)                        */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "SKILLS" && (
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm text-xs">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <h3 className="font-bold uppercase text-[11px] tracking-wider text-slate-500">
-                    Trade Skill Competency
-                  </h3>
-                  <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[11px]">
-                    {worker.skillLevel}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-5">
+              {/* Primary Profession & Practical Skills */}
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-slate-400 block text-[11px]">Primary Profession</span>
-                    <span className="font-bold text-slate-900">{worker.occupation}</span>
+                    <span className="text-[11px] font-bold text-blue-600 uppercase">Primary Profession</span>
+                    <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                      {worker.primaryProfession}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Designated Rank: <strong className="text-slate-800">{worker.skillLevel}</strong> ({worker.experience} Experience)
+                    </p>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Verified Experience</span>
-                    <span className="font-bold text-slate-900">{worker.experience}</span>
-                  </div>
-                  {worker.trainingInstitute && (
-                    <div className="col-span-2">
-                      <span className="text-slate-400 block text-[11px]">Training Institute</span>
-                      <span className="font-semibold text-slate-800">{worker.trainingInstitute}</span>
-                    </div>
-                  )}
                 </div>
 
                 <div>
-                  <span className="text-slate-400 block text-[11px] mb-1.5">Registered Practical Skills</span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                    Verified Competency Skills:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
                     {worker.skills.map((skill, idx) => (
                       <span
                         key={idx}
-                        className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 font-semibold text-[11px]"
+                        className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-800 text-xs font-semibold border border-blue-200"
                       >
-                        {skill}
+                        ✓ {skill}
                       </span>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {/* Certificate Dossier */}
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm text-xs">
-                <h3 className="font-bold uppercase text-[11px] tracking-wider text-slate-500 border-b pb-2">
-                  Accredited Certification Record
-                </h3>
+              {/* Certification Dossier Card */}
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <Award className="w-4 h-4 text-blue-600" />
+                    Formal Certification Record
+                  </h3>
 
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-slate-900 text-sm">{worker.certificateName}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                      {worker.skillVerificationStatus}
-                    </span>
+                  {/* Certification Badge */}
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                      isCertificateExpired()
+                        ? "bg-rose-50 text-rose-700 border-rose-300"
+                        : worker.skillVerificationStatus === "VERIFIED"
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                        : "bg-amber-50 text-amber-700 border-amber-300"
+                    }`}
+                  >
+                    {isCertificateExpired()
+                      ? "EXPIRED"
+                      : worker.skillVerificationStatus === "VERIFIED"
+                      ? "VERIFIED"
+                      : "REQUIRES REVIEW"}
+                  </span>
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Certificate Name</span>
+                    <span className="font-bold text-slate-900">{worker.certificateName}</span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-slate-600 font-mono text-[11px]">
-                    <div>
-                      <span className="text-slate-400">Authority:</span>{" "}
-                      <span className="text-slate-900 font-semibold">{worker.certificationAuthority}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Certificate ID:</span>{" "}
-                      <span className="text-slate-900 font-bold">{worker.certificateId}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Issued:</span> {worker.certificateIssueDate}
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Expiry:</span> {worker.certificateExpiryDate || "Permanent"}
-                    </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Issuing Organization</span>
+                    <span className="font-semibold text-slate-800">{worker.certificationAuthority}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Certificate / Roll ID</span>
+                    <span className="font-mono font-bold text-blue-700">{worker.certificateId}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Training Institute</span>
+                    <span className="font-semibold text-slate-800">{worker.trainingInstitute || "Accredited Vocational Center"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Issue Date</span>
+                    <span className="font-mono text-slate-800">{worker.certificateIssueDate}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Expiry Status</span>
+                    <span className="font-mono text-slate-800">
+                      {worker.certificateExpiryDate || "Permanent / No Expiry"}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 4: UPLOADED DOCUMENTS & ACTION CONTROLS */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {/* TAB 4: UPLOADED DOCUMENTS & VIEWER (Section 7)                    */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
           {activeTab === "DOCUMENTS" && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center text-xs">
-                <h3 className="font-bold uppercase text-[11px] tracking-wider text-slate-500">
-                  Uploaded Document Registry ({worker.documents.length})
-                </h3>
-                <span className="text-[11px] text-slate-500">
-                  Verified by Cooperative Secretary
-                </span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Uploaded Verification Documents
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Click any document card to open the 2-column inspector viewer.
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-3">
+              {/* Document Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                 {worker.documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-3 hover:border-slate-300 transition-all"
+                    onClick={() => setInspectingDoc(doc)}
+                    className="p-3.5 bg-white rounded-xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center shrink-0">
-                          <FileCheck className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">{doc.documentName}</h4>
-                          <p className="text-[11px] text-slate-500 font-mono">
-                            Type: <span className="uppercase">{doc.documentType}</span> • {doc.fileSize} • Uploaded {doc.uploadedAt}
-                          </p>
+                    {/* Thumbnail and Title */}
+                    <div className="space-y-3">
+                      <div className="h-32 rounded-lg bg-slate-100 overflow-hidden border border-slate-200 relative flex items-center justify-center">
+                        <img
+                          src={doc.previewUrl || doc.fileUrl}
+                          alt={doc.documentName}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          loading="lazy"
+                        />
+                        <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="px-3 py-1 bg-white text-slate-900 rounded-lg text-xs font-bold shadow-md flex items-center gap-1">
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Inspect</span>
+                          </span>
                         </div>
                       </div>
 
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        doc.status === "VERIFIED"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : doc.status === "REJECTED"
-                          ? "bg-rose-50 text-rose-700 border-rose-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}>
-                        {doc.status}
+                      <div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">
+                            {doc.documentType.replace(/_/g, " ")}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                              doc.status === "VERIFIED"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                                : doc.status === "REJECTED"
+                                ? "bg-rose-50 text-rose-700 border-rose-300"
+                                : "bg-amber-50 text-amber-700 border-amber-300"
+                            }`}
+                          >
+                            {doc.status}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-900 mt-1 truncate">
+                          {doc.documentName}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                          Uploaded: {doc.uploadedAt} • {doc.fileSize}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick Card Action */}
+                    <div className="pt-3 border-t border-slate-100 mt-3 flex items-center justify-between text-xs font-semibold text-blue-600">
+                      <span>Inspect Document</span>
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {/* TAB 5: AUDIT LOG TIMELINE (Section 9)                             */}
+          {/* ═════════════════════════════════════════════════════════════════ */}
+          {activeTab === "TIMELINE" && (
+            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Verification Audit Trail
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Immutable activity log recorded under Cooperative Society Rules.
+                  </p>
+                </div>
+              </div>
+
+              {/* Timeline Items */}
+              <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                {worker.auditTimeline.map((item) => (
+                  <div key={item.id} className="relative group text-xs">
+                    <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-600 border-2 border-white shadow-sm" />
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900">{item.action}</span>
+                        <span className="font-mono text-[10px] text-slate-400">{item.timestamp}</span>
+                      </div>
+                      <p className="text-slate-600 leading-relaxed text-[11px]">{item.details}</p>
+                      <span className="text-[10px] text-slate-400 block pt-0.5 font-medium">
+                        By: <strong className="text-slate-700">{item.adminName}</strong>
                       </span>
                     </div>
-
-                    {doc.rejectionReason && (
-                      <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-800 font-medium">
-                        ⚠ Rejection Note: {doc.rejectionReason}
-                      </div>
-                    )}
-
-                    {doc.verifiedBy && (
-                      <p className="text-[10px] text-slate-500 italic">
-                        Verified by {doc.verifiedBy} at {doc.verifiedAt}
-                      </p>
-                    )}
-
-                    {/* Action Buttons for this Document */}
-                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setInspectingDoc(doc)}
-                        className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold flex items-center gap-1 transition-all border border-blue-200"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>View Document</span>
-                      </button>
-
-                      {doc.status !== "VERIFIED" && (
-                        <button
-                          type="button"
-                          onClick={() => handleApproveDoc(doc.id)}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold flex items-center gap-1 transition-all border border-emerald-200"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Approve</span>
-                        </button>
-                      )}
-
-                      {doc.status !== "REJECTED" && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenRejectPrompt(doc)}
-                          className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold flex items-center gap-1 transition-all border border-rose-200"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span>Reject</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => handleRequestReupload(doc.id)}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 font-medium flex items-center gap-1 transition-all border border-slate-200 text-[11px]"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        <span>Request Re-upload</span>
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {/* TAB 5: AUDIT LOG TIMELINE */}
-          {activeTab === "TIMELINE" && (
-            <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 shadow-sm text-xs">
-              <h3 className="font-bold uppercase text-[11px] tracking-wider text-slate-500 border-b pb-2">
-                Cooperative KYC Activity Audit Trail
-              </h3>
-
-              <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                {worker.auditTimeline.map((log) => (
-                  <div key={log.id} className="relative space-y-1">
-                    <span className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full bg-blue-600 border-2 border-white" />
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="font-bold text-slate-800">{log.adminName}</span>
-                      <span className="text-slate-400 font-mono">{log.timestamp}</span>
-                    </div>
-                    <p className="text-slate-600 font-medium leading-relaxed">{log.details}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
 
-        {/* Sticky Decision Footer */}
-        <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row gap-2.5 shrink-0 shadow-lg">
-          <button
-            type="button"
-            onClick={() => setShowRejectionModal(true)}
-            className="px-4 py-2.5 rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-          >
-            <XCircle className="w-4 h-4" />
-            <span>Reject Application</span>
-          </button>
+        {/* ─── 4. STICKY ACTION BAR (Section 10) ──────────────────────────── */}
+        <div className="px-5 py-3.5 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="text-xs text-slate-500 hidden sm:flex items-center gap-1.5">
+            <Info className="w-4 h-4 text-slate-400" />
+            <span>
+              {progressPct === 100
+                ? "All requirements verified. Ready for approval."
+                : `${5 - verifiedChecks} requirement(s) pending verification.`}
+            </span>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("DOCUMENTS");
-              alert("Please select individual documents above to flag re-upload requests with detailed notes.");
-            }}
-            className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>Request Additional Info</span>
-          </button>
+          {/* Action Buttons: Never overlapped by LEXI */}
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            {/* Reject Application */}
+            <button
+              type="button"
+              onClick={() => setShowRejectionModal(true)}
+              className="flex-1 sm:flex-none px-4 py-2 bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs rounded-xl border border-rose-300 hover:border-rose-400 transition-colors shadow-sm"
+            >
+              ✕ Reject Application
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setShowApprovalModal(true)}
-            className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Approve &amp; Verify Worker (Tier-5)</span>
-          </button>
+            {/* Request Additional Information */}
+            <button
+              type="button"
+              onClick={() => setShowRequestInfoModal(true)}
+              className="flex-1 sm:flex-none px-4 py-2 bg-white hover:bg-amber-50 text-amber-800 font-bold text-xs rounded-xl border border-amber-300 hover:border-amber-400 transition-colors shadow-sm"
+            >
+              ⚠ Request Clarification
+            </button>
+
+            {/* Approve & Verify Worker */}
+            <button
+              type="button"
+              onClick={() => setShowApprovalModal(true)}
+              className="flex-1 sm:flex-none px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-[0.98]"
+            >
+              ✓ Approve & Verify
+            </button>
+          </div>
         </div>
-
       </div>
 
-      {/* DOCUMENT VIEWER MODAL */}
-      <DocumentViewerModal
-        document={inspectingDoc}
-        onClose={() => setInspectingDoc(null)}
-        workerName={worker.workerName}
-      />
+      {/* ─── MODAL: DOCUMENT VIEWER ──────────────────────────────────────── */}
+      {inspectingDoc && (
+        <DocumentViewerModal
+          document={inspectingDoc}
+          onClose={() => setInspectingDoc(null)}
+          workerName={worker.workerName}
+          workerOccupation={worker.occupation}
+          certificateAuthority={worker.certificationAuthority}
+          certificateId={worker.certificateId}
+          onVerify={(docId, notes) => handleApproveDoc(docId, notes)}
+          onRequestClarification={(docId, notes) => handleRequestReupload(docId, notes)}
+          onReject={(docId, reason) => {
+            updateDocumentStatus(worker.id, docId, "REJECTED", reason);
+            onWorkerUpdated();
+          }}
+        />
+      )}
 
-      {/* DOCUMENT REJECTION REASON PROMPT MODAL */}
-      {rejectionTargetDoc && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-slate-200">
+      {/* ─── MODAL: CONFIRM APPROVAL ─────────────────────────────────────── */}
+      {showApprovalModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Reject Document: {rejectionTargetDoc.documentName}
+              <h3 className="text-base font-bold text-slate-900">
+                Approve Worker Verification?
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Specify the mandatory verification failure reason for cooperative audit records.
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Are you sure you want to approve and verify <strong>{worker.workerName}</strong> as a certified artisan in cooperative {worker.societyReg}?
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase">
+                Admin Audit Notes (Optional)
+              </label>
+              <textarea
+                value={finalAdminNotes}
+                onChange={(e) => setFinalAdminNotes(e.target.value)}
+                placeholder="e.g. Verified trade certification & physical society roster..."
+                rows={2}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowApprovalModal(false)}
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={handleExecuteApproval}
+                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors disabled:opacity-50"
+              >
+                {isProcessing ? "Processing..." : "Confirm & Verify"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: CONFIRM REJECTION ────────────────────────────────────── */}
+      {showRejectionModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+            <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+              <XCircle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Reject Worker Application?
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Please enter a mandatory rejection reason to be recorded in the cooperative audit trail.
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700">Select Standard Reason</label>
+              <label className="text-xs font-bold text-slate-500 uppercase">
+                Rejection Reason (Required)
+              </label>
               <select
                 value={selectedReason}
                 onChange={(e) => setSelectedReason(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none"
               >
                 {REJECTION_REASONS.map((r, i) => (
                   <option key={i} value={r}>
@@ -690,158 +1114,87 @@ export default function WorkerVerificationDrawer({
                   </option>
                 ))}
               </select>
-            </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">Custom Observation / Notes</label>
               <textarea
-                rows={2}
-                value={customReason}
-                onChange={(e) => setCustomReason(e.target.value)}
-                placeholder="e.g. Roll number does not exist in 2022 exam list..."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setRejectionTargetDoc(null)}
-                className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmRejectDoc}
-                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm"
-              >
-                Confirm Rejection
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FINAL APPROVAL CONFIRMATION MODAL */}
-      {showApprovalModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-
-            <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-slate-900">
-                Confirm Official Cooperative Verification
-              </h3>
-              <p className="text-xs text-slate-500">
-                You are about to mark this artisan as verified under the 5-tier cooperative quality framework.
-              </p>
-            </div>
-
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2 font-mono">
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-sans">Artisan Name:</span>
-                <span className="font-bold text-slate-900 font-sans">{worker.workerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-sans">Worker ID:</span>
-                <span className="font-bold text-slate-900">{worker.workerId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-sans">Trade Profession:</span>
-                <span className="font-bold text-blue-700 font-sans">{worker.occupation}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-sans">Cooperative Society:</span>
-                <span className="font-semibold text-slate-800 font-sans">{worker.cooperativeSociety}</span>
-              </div>
-              <div className="flex justify-between border-t pt-1.5">
-                <span className="text-slate-500 font-sans">Verified Checklist:</span>
-                <span className="font-bold text-emerald-700 font-sans">{progressPct}% Passed</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">Inspector Remarks (Optional)</label>
-              <textarea
-                rows={2}
                 value={finalAdminNotes}
                 onChange={(e) => setFinalAdminNotes(e.target.value)}
-                placeholder="e.g. Identity and trade certificate verified against society ledger..."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+                placeholder="Additional details for the worker..."
+                rows={2}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none resize-none"
               />
             </div>
 
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowApprovalModal(false)}
-                disabled={isProcessing}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteApproval}
-                disabled={isProcessing}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm flex items-center justify-center gap-1.5"
-              >
-                {isProcessing ? "Verifying..." : "Confirm & Verify Worker"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FINAL REJECTION CONFIRMATION MODAL */}
-      {showRejectionModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-slate-200">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto">
-              <XCircle className="w-6 h-6" />
-            </div>
-
-            <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-slate-900">
-                Reject Worker KYC Application
-              </h3>
-              <p className="text-xs text-slate-500">
-                Provide the primary rejection reason. The worker will be notified with instructions to remediate.
-              </p>
-            </div>
-
-            <textarea
-              rows={3}
-              value={finalAdminNotes}
-              onChange={(e) => setFinalAdminNotes(e.target.value)}
-              placeholder="e.g. Documents failed trade skill authenticity requirements..."
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-rose-500"
-            />
-
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => setShowRejectionModal(false)}
-                disabled={isProcessing}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleExecuteRejection}
                 disabled={isProcessing}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm"
+                onClick={handleExecuteRejection}
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors disabled:opacity-50"
               >
-                {isProcessing ? "Processing..." : "Confirm Rejection"}
+                {isProcessing ? "Rejecting..." : "Confirm Rejection"}
               </button>
             </div>
           </div>
         </div>
       )}
-    </>
+
+      {/* ─── MODAL: REQUEST ADDITIONAL INFORMATION ───────────────────────── */}
+      {showRequestInfoModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Request Additional Information
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Specify what information or documents the worker needs to provide.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase">
+                Clarification Instructions
+              </label>
+              <textarea
+                value={requestInfoNotes}
+                onChange={(e) => setRequestInfoNotes(e.target.value)}
+                placeholder="e.g. Please provide a clear scan of the original ITI National Trade Certificate..."
+                rows={3}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRequestInfoModal(false)}
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={handleExecuteRequestInfo}
+                className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors disabled:opacity-50"
+              >
+                {isProcessing ? "Submitting..." : "Send Request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

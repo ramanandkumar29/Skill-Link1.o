@@ -54,6 +54,34 @@ export default function LexiChat({ onBookWorker, onSelectService }: LexiChatProp
     return () => clearInterval(interval);
   }, []);
 
+  // Modal active listener to completely eliminate UI overlap with modals & drawers
+  const [isModalActive, setIsModalActive] = useState(false);
+
+  useEffect(() => {
+    const handleModalOpen = () => setIsModalActive(true);
+    const handleModalClose = () => setIsModalActive(false);
+
+    window.addEventListener("skill-link-modal-open", handleModalOpen);
+    window.addEventListener("skill-link-modal-close", handleModalClose);
+
+    const handleOpenLexiWorker = (e: any) => {
+      const workerInfo = e?.detail;
+      setIsOpen(true);
+      if (workerInfo?.workerName) {
+        handleSendMessage(
+          `Please provide a verification audit summary for worker ${workerInfo.workerName} (${workerInfo.workerId || ""}, ${workerInfo.occupation || ""}).`
+        );
+      }
+    };
+    window.addEventListener("skill-link-open-lexi-worker", handleOpenLexiWorker);
+
+    return () => {
+      window.removeEventListener("skill-link-modal-open", handleModalOpen);
+      window.removeEventListener("skill-link-modal-close", handleModalClose);
+      window.removeEventListener("skill-link-open-lexi-worker", handleOpenLexiWorker);
+    };
+  }, []);
+
   // Voice recognition callbacks
   const handleToggleVoice = () => {
     if (isListening) {
@@ -295,7 +323,7 @@ export default function LexiChat({ onBookWorker, onSelectService }: LexiChatProp
   return (
     <>
       {/* ─── 1. FLOATING LAUNCHER BUTTON ─────────────────────────────────── */}
-      {!isOpen && (
+      {!isOpen && !isModalActive && (
         <button
           type="button"
           onClick={() => setIsOpen(true)}
