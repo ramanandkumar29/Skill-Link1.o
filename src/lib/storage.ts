@@ -1,7 +1,7 @@
 import { WorkerProfile, INITIAL_WORKERS, ServiceBooking } from "./seedData";
 
-const WORKERS_KEY = "skilllink_workers_v2";
-const BOOKINGS_KEY = "skilllink_bookings_v2";
+const WORKERS_KEY = "skilllink_workers_coop_v2";
+const BOOKINGS_KEY = "skilllink_bookings_coop_v1";
 
 export function getStoredWorkers(): WorkerProfile[] {
   if (typeof window === "undefined") return INITIAL_WORKERS;
@@ -12,7 +12,16 @@ export function getStoredWorkers(): WorkerProfile[] {
       localStorage.setItem(WORKERS_KEY, JSON.stringify(INITIAL_WORKERS));
       return INITIAL_WORKERS;
     }
-    return JSON.parse(data);
+    const parsed: WorkerProfile[] = JSON.parse(data);
+    // Ensure newly added initial workers (like Ramanand Kumar) are included
+    const existingIds = new Set(parsed.map((w) => w.id));
+    const missing = INITIAL_WORKERS.filter((w) => !existingIds.has(w.id));
+    if (missing.length > 0) {
+      const merged = [...missing, ...parsed];
+      localStorage.setItem(WORKERS_KEY, JSON.stringify(merged));
+      return merged;
+    }
+    return parsed;
   } catch (err) {
     console.error("Error reading workers from localStorage", err);
     return INITIAL_WORKERS;
@@ -74,7 +83,7 @@ export function updateBookingStatus(bookingId: string, status: "Pending" | "Conf
   return bookings[idx];
 }
 
-export function updateBookingPhoto(bookingId: string, photoUrl: string, finalAmount: number): ServiceBooking | null {
+export function updateBookingPhoto(bookingId: string, photoUrl: string, finalAmount: number = 499): ServiceBooking | null {
   const bookings = getStoredBookings();
   const idx = bookings.findIndex((b) => b.id === bookingId);
   if (idx === -1) return null;

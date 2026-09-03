@@ -1,0 +1,1972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skill-Link — Character & Animated Interactive Presentation Deck</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #070a13;
+      --card-bg: rgba(15, 23, 42, 0.88);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --primary: #3b82f6;
+      --cyan: #38bdf8;
+      --sos: #ef4444;
+      --amber: #f59e0b;
+      --emerald: #10b981;
+      --purple: #a855f7;
+      --pink: #ec4899;
+      --text-white: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-white);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      background-image: 
+        radial-gradient(circle at 15% 20%, rgba(59, 130, 246, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 80%, rgba(168, 85, 247, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05) 0%, transparent 60%);
+    }
+
+    h1, h2, h3, h4, .font-heading {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    code, pre {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Ambient Background Mesh Canvas */
+    #bgCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* Top Navigation Bar */
+    .topbar {
+      position: relative;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 24px;
+      background: rgba(10, 16, 30, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.3rem;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+
+    .brand-logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #2563eb, #38bdf8);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #2563eb, #38bdf8);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .top-characters {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(30, 41, 59, 0.6);
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.82rem;
+    }
+
+    .character-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .character-pill:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.07);
+      color: #fff;
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-color: #3b82f6;
+      box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.6);
+    }
+
+    .btn-sos {
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      border-color: #ef4444;
+      animation: pulseSos 2s infinite;
+    }
+
+    @keyframes pulseSos {
+      0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+    }
+
+    /* Deck Stage */
+    .deck-container {
+      position: relative;
+      z-index: 10;
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 24px;
+    }
+
+    .slide {
+      position: absolute;
+      width: min(1280px, 95vw);
+      height: min(720px, 88vh);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 36px 44px;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.95) translateY(24px);
+      transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
+      box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(20px);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+    }
+
+    /* Slide Header */
+    .slide-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 12px;
+    }
+
+    .slide-tag {
+      color: var(--cyan);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .slide-title {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.2;
+      letter-spacing: -0.5px;
+    }
+
+    .slide-character-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      animation: floatBadge 3s ease-in-out infinite;
+    }
+
+    @keyframes floatBadge {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .slide-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      flex: 1;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      flex: 1;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      flex: 1;
+    }
+
+    .grid-story {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+      flex: 1;
+      align-items: stretch;
+    }
+
+    /* Interactive Feature Cards */
+    .card {
+      background: rgba(18, 26, 45, 0.65);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.28);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--card-accent, transparent);
+    }
+
+    .card.accent-blue { --card-accent: var(--primary); }
+    .card.accent-cyan { --card-accent: var(--cyan); }
+    .card.accent-sos { --card-accent: var(--sos); }
+    .card.accent-amber { --card-accent: var(--amber); }
+    .card.accent-emerald { --card-accent: var(--emerald); }
+    .card.accent-purple { --card-accent: var(--purple); }
+    .card.accent-pink { --card-accent: var(--pink); }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-desc {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    ul.bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    ul.bullet-list li {
+      position: relative;
+      padding-left: 22px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.48;
+    }
+
+    ul.bullet-list li::before {
+      content: "➔";
+      position: absolute;
+      left: 0;
+      color: var(--cyan);
+      font-size: 0.85rem;
+      top: 1px;
+    }
+
+    /* Hero Slide Special Elements */
+    .hero-wrapper {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 32px;
+      align-items: center;
+      height: 100%;
+    }
+
+    .hero-title {
+      font-size: 3.6rem;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1.05;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 30%, #60a5fa 70%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: var(--cyan);
+      margin-bottom: 14px;
+      line-height: 1.3;
+    }
+
+    .hero-desc {
+      font-size: 1rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 22px;
+    }
+
+    .hero-mascots-stage {
+      position: relative;
+      width: 100%;
+      height: 380px;
+      background: radial-gradient(circle at center, rgba(37, 99, 235, 0.2) 0%, transparent 70%);
+      border-radius: 20px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Character SVG Animation Containers */
+    .svg-character {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
+      transition: all 0.3s ease;
+    }
+
+    .svg-character:hover {
+      transform: scale(1.05) translateY(-6px);
+    }
+
+    .character-speech-bubble {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--cyan);
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: 0.8rem;
+      color: #fff;
+      white-space: nowrap;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+      animation: bubbleBounce 2.5s infinite ease-in-out;
+      z-index: 20;
+    }
+
+    .character-speech-bubble::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--cyan);
+    }
+
+    @keyframes bubbleBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    /* SVG Character Keyframe Animations */
+    @keyframes bobbleHead {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-4px) rotate(1.5deg); }
+    }
+
+    @keyframes floatRobot {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    @keyframes eyeScan {
+      0%, 100% { transform: translateX(0); }
+      30% { transform: translateX(-4px); }
+      70% { transform: translateX(4px); }
+    }
+
+    @keyframes waveArm {
+      0%, 100% { transform: rotate(0deg); }
+      50% { transform: rotate(15deg); }
+    }
+
+    @keyframes pulseRing {
+      0% { transform: scale(0.85); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.3; }
+      100% { transform: scale(0.85); opacity: 0.8; }
+    }
+
+    @keyframes bikeMove {
+      0% { transform: translateX(-40px); }
+      50% { transform: translateX(40px); }
+      100% { transform: translateX(-40px); }
+    }
+
+    /* Radar SOS Map Simulation Component */
+    .radar-stage {
+      width: 100%;
+      height: 240px;
+      background: #0b1329;
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .radar-grid {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(rgba(239, 68, 68, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(239, 68, 68, 0.08) 1px, transparent 1px);
+      background-size: 30px 30px;
+    }
+
+    .radar-circle {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px dashed rgba(239, 68, 68, 0.35);
+      animation: radarExpand 4s infinite linear;
+    }
+
+    @keyframes radarExpand {
+      0% { width: 40px; height: 40px; opacity: 1; }
+      100% { width: 340px; height: 340px; opacity: 0; }
+    }
+
+    .radar-sweep {
+      position: absolute;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg at 50% 50%, rgba(239, 68, 68, 0.4) 0deg, transparent 60deg, transparent 360deg);
+      animation: radarSpin 3s linear infinite;
+    }
+
+    @keyframes radarSpin {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Voice Waveform Bar Visualizer */
+    .waveform-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 36px;
+      padding: 0 10px;
+    }
+
+    .wave-bar {
+      width: 4px;
+      background: var(--emerald);
+      border-radius: 2px;
+      animation: waveBounce 1.2s ease-in-out infinite alternate;
+    }
+
+    .wave-bar:nth-child(1) { height: 12px; animation-delay: 0.1s; }
+    .wave-bar:nth-child(2) { height: 26px; animation-delay: 0.3s; }
+    .wave-bar:nth-child(3) { height: 34px; animation-delay: 0.2s; }
+    .wave-bar:nth-child(4) { height: 18px; animation-delay: 0.5s; }
+    .wave-bar:nth-child(5) { height: 30px; animation-delay: 0.4s; }
+    .wave-bar:nth-child(6) { height: 14px; animation-delay: 0.2s; }
+
+    @keyframes waveBounce {
+      0% { transform: scaleY(0.3); }
+      100% { transform: scaleY(1); }
+    }
+
+    /* Interactive Live Simulation Cards */
+    .sim-panel {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sim-btn {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid var(--cyan);
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .sim-btn:hover {
+      background: var(--cyan);
+      color: #000;
+    }
+
+    .live-code-box {
+      background: #090e1a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.8rem;
+      color: #a5f3fc;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    /* Comparison Table */
+    .comp-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+
+    .comp-table th, .comp-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 0.88rem;
+    }
+
+    .comp-table th {
+      background: rgba(15, 23, 42, 0.95);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .comp-table tr:hover td {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .status-check { color: var(--emerald); font-weight: bold; }
+    .status-cross { color: var(--sos); font-weight: bold; }
+
+    /* Bottom Navigation Bar */
+    .bottombar {
+      position: relative;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 24px;
+      background: rgba(10, 16, 30, 0.85);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid var(--card-border);
+    }
+
+    .progress-track {
+      flex: 1;
+      max-width: 450px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 0 20px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2563eb, #38bdf8, #a855f7);
+      width: 8.33%;
+      transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .shortcuts-hint {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
+    kbd {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 0.72rem;
+      font-family: inherit;
+    }
+
+    /* Laser Pointer */
+    #laserPointer {
+      position: fixed;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ff0055;
+      box-shadow: 0 0 15px 4px #ff0055, 0 0 30px 8px rgba(255, 0, 85, 0.5);
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Speaker Notes Modal */
+    #speakerNotesModal {
+      position: fixed;
+      bottom: 60px;
+      right: 24px;
+      width: 360px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid var(--cyan);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+      backdrop-filter: blur(20px);
+      z-index: 1000;
+      display: none;
+      animation: modalSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalSlide {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        overflow: visible;
+        height: auto;
+        background: #0b1120;
+        color: #fff;
+      }
+      .topbar, .bottombar, #laserPointer, #speakerNotesModal, #bgCanvas {
+        display: none !important;
+      }
+      .deck-container {
+        display: block;
+        padding: 0;
+      }
+      .slide {
+        position: relative !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        transform: none !important;
+        page-break-after: always;
+        width: 100% !important;
+        height: 100vh !important;
+        background: #0f172a !important;
+        color: #fff !important;
+        margin-bottom: 20px;
+        box-shadow: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Canvas Background -->
+  <canvas id="bgCanvas"></canvas>
+  <div id="laserPointer"></div>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo-icon">⚡</div>
+      <span>Skill-Link</span>
+      <span class="brand-badge">Animated Pro</span>
+    </div>
+
+    <!-- Character Quick Toggles -->
+    <div class="top-characters">
+      <span style="color:var(--text-muted); font-size:0.75rem; font-weight:700;">PERSONAS:</span>
+      <div class="character-pill" onclick="triggerCharacterQuote('vikram')">
+        <span>👷‍♂️</span>
+        <span>Vikram (Pro)</span>
+      </div>
+      <div class="character-pill" onclick="triggerCharacterQuote('priya')">
+        <span>👩‍💼</span>
+        <span>Priya (User)</span>
+      </div>
+      <div class="character-pill" onclick="triggerCharacterQuote('lexi')">
+        <span>🤖</span>
+        <span>Lexi (AI)</span>
+      </div>
+      <div class="character-pill" onclick="triggerCharacterQuote('suraksha')">
+        <span>🛡️</span>
+        <span>Suraksha</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="laserBtn" onclick="toggleLaser()" title="Laser Pointer (L)">🔴 Laser</button>
+      <button class="btn" id="notesBtn" onclick="toggleNotes()" title="Speaker Notes (N)">📝 Notes</button>
+      <button class="btn" id="autoplayBtn" onclick="toggleAutoplay()" title="Autoplay Slides (A)">▶ Autoplay</button>
+      <button class="btn" onclick="toggleSound()" id="soundBtn" title="Toggle Sound Effects">🔊 SFX</button>
+      <button class="btn" onclick="toggleFullscreen()" title="Fullscreen (F)">⛶ Fullscreen</button>
+      <button class="btn btn-primary" onclick="window.print()" title="Export PDF">📄 Export PDF</button>
+      <a href="Skill-Link_Project_Presentation.pptx" download class="btn btn-sos" style="text-decoration:none;">📥 .PPTX Deck</a>
+    </div>
+  </header>
+
+  <!-- Deck Container -->
+  <main class="deck-container">
+
+    <!-- ==========================================
+         SLIDE 1: Title & Mascot Introduction
+         ========================================== -->
+    <section class="slide active" data-slide="1">
+      <div class="hero-wrapper">
+        <div>
+          <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(37,99,235,0.2); border:1px solid rgba(56,189,248,0.4); padding:6px 14px; border-radius:999px; font-size:0.82rem; font-weight:700; color:var(--cyan); margin-bottom:14px;">
+            <span>⚡ NEXT-GEN HYPERLOCAL ASSISTANCE PLATFORM</span>
+          </div>
+          <h1 class="hero-title">Skill-Link</h1>
+          <h2 class="hero-subtitle">Intelligent Hyperlocal Skilled Worker & On-Road Emergency SOS Ecosystem</h2>
+          <p class="hero-desc">
+            Bridging verified local professionals, 15-minute emergency roadside mechanics, and everyday citizens through autonomous AI agent reasoning, multilingual voice UX, and transparent rates.
+          </p>
+
+          <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
+            <div style="background:rgba(30,41,59,0.8); border:1px solid var(--card-border); padding:8px 14px; border-radius:10px; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span>🚨</span> 15-Min On-Road SOS
+            </div>
+            <div style="background:rgba(30,41,59,0.8); border:1px solid var(--card-border); padding:8px 14px; border-radius:10px; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span>🎙️</span> Sahayak Voice AI
+            </div>
+            <div style="background:rgba(30,41,59,0.8); border:1px solid var(--card-border); padding:8px 14px; border-radius:10px; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span>🤖</span> Lexi RAG Autonomous Agent
+            </div>
+            <div style="background:rgba(30,41,59,0.8); border:1px solid var(--card-border); padding:8px 14px; border-radius:10px; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span>🛠️</span> QuickFix DIY Engine
+            </div>
+          </div>
+        </div>
+
+        <!-- Mascots Stage Showcase -->
+        <div class="hero-mascots-stage">
+          <div style="display:flex; align-items:center; justify-content:space-around; width:100%;">
+            
+            <!-- Character: Priya (Customer) -->
+            <div class="svg-character" style="animation: bobbleHead 3s ease-in-out infinite;">
+              <div class="character-speech-bubble" style="border-color:var(--pink);">
+                👩‍💼 "My car broke down at 9 PM!"
+              </div>
+              <svg width="100" height="150" viewBox="0 0 100 150">
+                <!-- Hair -->
+                <circle cx="50" cy="40" r="32" fill="#312e81" />
+                <path d="M22,48 Q50,15 78,48 Q70,75 50,75 Q30,75 22,48 Z" fill="#1e1b4b" />
+                <!-- Head -->
+                <circle cx="50" cy="45" r="22" fill="#fcd34d" />
+                <!-- Eyes & Smile -->
+                <circle cx="42" cy="43" r="3" fill="#1e293b" />
+                <circle cx="58" cy="43" r="3" fill="#1e293b" />
+                <path d="M44,53 Q50,60 56,53" stroke="#1e293b" stroke-width="2" fill="none" />
+                <!-- Smartphone in Hand -->
+                <rect x="68" y="70" width="16" height="28" rx="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+                <circle cx="76" cy="94" r="1.5" fill="#38bdf8" />
+                <!-- Body / Dress -->
+                <path d="M28,70 L72,70 L80,125 L20,125 Z" fill="#ec4899" />
+                <!-- Arms -->
+                <path d="M28,70 L15,95 L25,98" stroke="#fcd34d" stroke-width="6" stroke-linecap="round" fill="none" />
+                <path d="M72,70 L76,85" stroke="#fcd34d" stroke-width="6" stroke-linecap="round" fill="none" />
+                <!-- Legs -->
+                <rect x="36" y="125" width="8" height="22" fill="#475569" />
+                <rect x="56" y="125" width="8" height="22" fill="#475569" />
+              </svg>
+              <span style="font-size:0.75rem; font-weight:700; color:var(--pink); margin-top:6px;">Priya (User)</span>
+            </div>
+
+            <!-- Character: Lexi AI (Bot) -->
+            <div class="svg-character" style="animation: floatRobot 2.5s ease-in-out infinite;">
+              <div class="character-speech-bubble" style="border-color:var(--cyan);">
+                🤖 "Routing nearest mechanic..."
+              </div>
+              <svg width="110" height="150" viewBox="0 0 110 150">
+                <!-- Glowing Antenna -->
+                <line x1="55" y1="25" x2="55" y2="40" stroke="#38bdf8" stroke-width="3" />
+                <circle cx="55" cy="22" r="6" fill="#38bdf8">
+                  <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite" />
+                </circle>
+                <!-- Bot Head -->
+                <rect x="25" y="40" width="60" height="42" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5" />
+                <!-- Screen Visor -->
+                <rect x="33" y="48" width="44" height="22" rx="6" fill="#0284c7" />
+                <!-- Glowing Eyes -->
+                <circle cx="45" cy="59" r="4" fill="#ffffff" style="animation: eyeScan 2s infinite;" />
+                <circle cx="65" cy="59" r="4" fill="#ffffff" style="animation: eyeScan 2s infinite;" />
+                <!-- Floating Holographic Ring -->
+                <ellipse cx="55" cy="92" rx="36" ry="8" fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="4,4">
+                  <animateTransform attributeName="transform" type="rotate" from="0 55 92" to="360 55 92" dur="6s" repeatCount="indefinite" />
+                </ellipse>
+                <!-- Bot Body -->
+                <path d="M35,86 L75,86 L68,125 L42,125 Z" fill="#334155" stroke="#38bdf8" stroke-width="2" />
+                <circle cx="55" cy="105" r="7" fill="#10b981" />
+                <!-- Thruster Glow -->
+                <path d="M45,126 Q55,145 65,126 Z" fill="url(#thrusterGlow)" />
+                <defs>
+                  <linearGradient id="thrusterGlow" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#38bdf8" />
+                    <stop offset="100%" stop-color="transparent" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <span style="font-size:0.75rem; font-weight:700; color:var(--cyan); margin-top:6px;">Lexi AI (Agent)</span>
+            </div>
+
+            <!-- Character: Vikram (Pro Mechanic) -->
+            <div class="svg-character" style="animation: bobbleHead 3.2s ease-in-out infinite 0.5s;">
+              <div class="character-speech-bubble" style="border-color:var(--amber);">
+                👷‍♂️ "Dispatched in 12 mins!"
+              </div>
+              <svg width="100" height="150" viewBox="0 0 100 150">
+                <!-- Hardhat Helmet -->
+                <path d="M22,35 Q50,10 78,35 L82,42 L18,42 Z" fill="#f59e0b" />
+                <rect x="16" y="40" width="68" height="4" rx="2" fill="#d97706" />
+                <!-- Head -->
+                <circle cx="50" cy="50" r="18" fill="#fcd34d" />
+                <!-- Moustache & Eyes -->
+                <circle cx="43" cy="48" r="2.5" fill="#1e293b" />
+                <circle cx="57" cy="48" r="2.5" fill="#1e293b" />
+                <path d="M40,56 Q50,60 60,56" stroke="#1e293b" stroke-width="2" fill="none" />
+                <!-- High-Vis Vest & Shirt -->
+                <path d="M26,68 L74,68 L78,122 L22,122 Z" fill="#2563eb" />
+                <path d="M34,68 L42,122 L58,122 L66,68 Z" fill="#facc15" />
+                <line x1="24" y1="95" x2="76" y2="95" stroke="#f8fafc" stroke-width="3" stroke-dasharray="3,3" />
+                <!-- Wrench in Hand -->
+                <g style="animation: waveArm 2s infinite ease-in-out; transform-origin: 26px 72px;">
+                  <path d="M26,72 L12,95" stroke="#fcd34d" stroke-width="5" stroke-linecap="round" fill="none" />
+                  <path d="M12,95 L4,85 L8,80 L14,90" stroke="#94a3b8" stroke-width="3.5" fill="none" stroke-linejoin="round" />
+                </g>
+                <path d="M74,72 L82,95" stroke="#fcd34d" stroke-width="5" stroke-linecap="round" fill="none" />
+                <!-- Pants -->
+                <rect x="32" y="122" width="12" height="25" fill="#1e293b" />
+                <rect x="56" y="122" width="12" height="25" fill="#1e293b" />
+              </svg>
+              <span style="font-size:0.75rem; font-weight:700; color:var(--amber); margin-top:6px;">Vikram (Pro)</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 2: Problem Statement Storyboard
+         ========================================== -->
+    <section class="slide" data-slide="2">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>⚠️</span> THE PROBLEM DILEMMA</div>
+          <h2 class="slide-title">The Real-World Crisis: Roadside Stranding & Service Chaos</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>👩‍💼</span> Priya’s Daily Struggle
+        </div>
+      </div>
+
+      <div class="grid-4">
+        
+        <!-- Problem Card 1 -->
+        <div class="card accent-sos">
+          <div style="font-size:2.2rem; margin-bottom:8px;">🚗💥</div>
+          <div class="card-title">Midnight Highway Stranding</div>
+          <div class="card-desc">
+            Commuters face sudden tyre blowouts or engine failure in unlit highway stretches with zero verified rapid mechanics nearby.
+          </div>
+          <div style="margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.78rem; color:var(--sos); font-weight:700;">
+            ⏳ Avg wait time: 2 to 4 hours
+          </div>
+        </div>
+
+        <!-- Problem Card 2 -->
+        <div class="card accent-amber">
+          <div style="font-size:2.2rem; margin-bottom:8px;">💸🏷️</div>
+          <div class="card-title">Unfair & Shady Pricing</div>
+          <div class="card-desc">
+            No standardized rate cards. Unregulated informal workers demand arbitrary surge pricing and cash extortion during emergencies.
+          </div>
+          <div style="margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.78rem; color:var(--amber); font-weight:700;">
+            📈 Overcharging: Up to 300% markup
+          </div>
+        </div>
+
+        <!-- Problem Card 3 -->
+        <div class="card accent-cyan">
+          <div style="font-size:2.2rem; margin-bottom:8px;">🗣️❌</div>
+          <div class="card-title">Language & Typing Barrier</div>
+          <div class="card-desc">
+            Over 65% of Bharat users struggle with typing English keywords or complex service apps, creating digital accessibility friction.
+          </div>
+          <div style="margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.78rem; color:var(--cyan); font-weight:700;">
+            📵 65% Non-English user exclusion
+          </div>
+        </div>
+
+        <!-- Problem Card 4 -->
+        <div class="card accent-purple">
+          <div style="font-size:2.2rem; margin-bottom:8px;">🔍❓</div>
+          <div class="card-title">Trust & Dispute Deficit</div>
+          <div class="card-desc">
+            No background checks, no verified skill certifications, and zero safety recourse for female commuters or senior citizens.
+          </div>
+          <div style="margin-top:auto; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.78rem; color:var(--purple); font-weight:700;">
+            🛡️ 0% Post-service guarantee
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 3: The Solution Ecosystem
+         ========================================== -->
+    <section class="slide" data-slide="3">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>💡</span> THE SKILL-LINK SOLUTION</div>
+          <h2 class="slide-title">The Unified AI-Driven Hyperlocal Ecosystem</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>🤖</span> Lexi Bridge Engine
+        </div>
+      </div>
+
+      <div class="grid-story">
+        
+        <!-- Left Visual Hub -->
+        <div class="card accent-blue" style="align-items:center; justify-content:center; text-align:center; padding:24px;">
+          <div style="position:relative; width:180px; height:180px; display:flex; align-items:center; justify-content:center;">
+            <!-- Outer Pulsing Ring -->
+            <div style="position:absolute; width:100%; height:100%; border:2px dashed var(--cyan); border-radius:50%; animation:pulseRing 3s infinite ease-in-out;"></div>
+            <!-- Core Bot Icon -->
+            <div style="width:90px; height:90px; background:linear-gradient(135deg, #1d4ed8, #0284c7); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2.5rem; box-shadow:0 0 30px rgba(56,189,248,0.5);">
+              🤖
+            </div>
+          </div>
+          <div style="font-size:1.2rem; font-weight:800; color:#fff; margin-top:14px;">Autonomous Dispatch Core</div>
+          <div style="font-size:0.85rem; color:var(--cyan); margin-top:4px;">RAG Knowledge + Geofencing + Tools</div>
+          <div style="margin-top:14px; background:rgba(255,255,255,0.06); padding:8px 14px; border-radius:10px; font-size:0.8rem;">
+            ⚡ 15s Auto-Lock • 100% Rate Lock
+          </div>
+        </div>
+
+        <!-- Right 3 Core Pillars -->
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div class="card accent-sos" style="flex-direction:row; align-items:center; gap:16px;">
+            <div style="font-size:2rem; background:rgba(239,68,68,0.2); padding:12px; border-radius:12px;">🚨</div>
+            <div>
+              <div class="card-title" style="color:var(--sos);">15-Minute Priority Roadside SOS</div>
+              <div class="card-desc">Live browser GPS coordinates lock + auto-dispatching mobile mechanics for tyre punctures, dead batteries, and engine stalls.</div>
+            </div>
+          </div>
+
+          <div class="card accent-emerald" style="flex-direction:row; align-items:center; gap:16px;">
+            <div style="font-size:2rem; background:rgba(16,185,129,0.2); padding:12px; border-radius:12px;">🎙️</div>
+            <div>
+              <div class="card-title" style="color:var(--emerald);">Sahayak Multilingual Voice Engine</div>
+              <div class="card-desc">Zero-typing conversational booking in Hindi and English with natural speech synthesis feedback for effortless accessibility.</div>
+            </div>
+          </div>
+
+          <div class="card accent-purple" style="flex-direction:row; align-items:center; gap:16px;">
+            <div style="font-size:2rem; background:rgba(168,85,247,0.2); padding:12px; border-radius:12px;">🛠️</div>
+            <div>
+              <div class="card-title" style="color:var(--purple);">QuickFix DIY Tree & Brand Directory</div>
+              <div class="card-desc">Guided self-service troubleshooting with safety alerts and verified official toll-free directory for 50+ auto/home brands.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 4: 15-Minute SOS Radar Simulation
+         ========================================== -->
+    <section class="slide" data-slide="4">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>🚨</span> EMERGENCY DISPATCH</div>
+          <h2 class="slide-title">15-Minute Priority SOS: Live Geolocation Radar</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>👷‍♂️</span> Vikram En Route
+        </div>
+      </div>
+
+      <div class="grid-2" style="align-items:center;">
+        
+        <!-- Interactive Radar Display -->
+        <div class="radar-stage">
+          <div class="radar-grid"></div>
+          <div class="radar-circle" style="animation-delay:0s;"></div>
+          <div class="radar-circle" style="animation-delay:1.5s;"></div>
+          <div class="radar-circle" style="animation-delay:3s;"></div>
+          <div class="radar-sweep"></div>
+
+          <!-- Stranded User Marker (Priya) -->
+          <div style="position:absolute; top:45%; left:30%; transform:translate(-50%,-50%); text-align:center; z-index:10;">
+            <div style="background:#ef4444; width:22px; height:22px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 15px #ef4444; margin:0 auto; animation:pulseSos 1.5s infinite;"></div>
+            <span style="font-size:0.7rem; font-weight:800; color:#fff; background:rgba(0,0,0,0.7); padding:1px 6px; border-radius:4px;">Priya (Stranded)</span>
+          </div>
+
+          <!-- Dispatched Mechanic Marker (Vikram) -->
+          <div id="mechanicMarker" style="position:absolute; top:42%; left:75%; transform:translate(-50%,-50%); text-align:center; z-index:10; transition:all 2s cubic-bezier(0.16, 1, 0.3, 1);">
+            <div style="background:#10b981; width:24px; height:24px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 15px #10b981; margin:0 auto; display:flex; align-items:center; justify-content:center; font-size:0.75rem;">🛵</div>
+            <span style="font-size:0.7rem; font-weight:800; color:#10b981; background:rgba(0,0,0,0.7); padding:1px 6px; border-radius:4px;">Vikram (1.8 km)</span>
+          </div>
+
+          <!-- Countdown Badge -->
+          <div style="position:absolute; bottom:12px; right:14px; background:rgba(0,0,0,0.85); border:1px solid var(--sos); padding:6px 12px; border-radius:8px; font-size:0.8rem; font-weight:800; color:var(--sos);">
+            ⏱️ ETA: <span id="sosTimer">12m 40s</span>
+          </div>
+        </div>
+
+        <!-- SOS Workflow Features -->
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div class="card accent-sos">
+            <div class="card-title" style="color:var(--sos);">⚡ 15-Second Auto-Lock Dispatch</div>
+            <div class="card-desc">
+              When an SOS alert is triggered, the system broadcasts to the top 3 closest certified mobile mechanics within a 5 km geo-radius. The first confirmation auto-locks the ticket.
+            </div>
+          </div>
+
+          <div class="card accent-cyan">
+            <div class="card-title" style="color:var(--cyan);">📍 Precision Geolocation Extraction</div>
+            <div class="card-desc">
+              Uses HTML5 High-Accuracy Geolocation API with reverse geocoding to resolve highway mile markers even without manual address input.
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px;">
+            <button class="sim-btn" style="flex:1;" onclick="simulateSosDispatch()">▶ Test SOS Dispatch Sim</button>
+            <button class="sim-btn" style="border-color:var(--emerald); color:var(--emerald);" onclick="resetSosSim()">🔄 Reset</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 5: Sahayak Voice & Lexi RAG Flow
+         ========================================== -->
+    <section class="slide" data-slide="5">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>🧠</span> AI & VOICE ARCHITECTURE</div>
+          <h2 class="slide-title">Sahayak Multilingual Voice & Lexi Autonomous RAG</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>🎙️</span> Bilingual AI Pipeline
+        </div>
+      </div>
+
+      <div class="grid-2">
+        
+        <!-- Left: Voice & Speech Engine -->
+        <div class="card accent-emerald">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <div class="card-title" style="color:var(--emerald); margin-bottom:0;">🎙️ Sahayak Voice Engine</div>
+            <div class="waveform-container">
+              <div class="wave-bar"></div>
+              <div class="wave-bar"></div>
+              <div class="wave-bar"></div>
+              <div class="wave-bar"></div>
+              <div class="wave-bar"></div>
+              <div class="wave-bar"></div>
+            </div>
+          </div>
+
+          <ul class="bullet-list">
+            <li><strong>Zero-Typing Experience:</strong> Empowers non-tech-savvy users to speak naturally.</li>
+            <li><strong>Hindi & English Recognition:</strong> Real-time intent detection in colloquial Hinglish.</li>
+            <li><strong>Speech Synthesis Response:</strong> Speaks back confirmation details aloud.</li>
+          </ul>
+
+          <!-- Interactive Voice Demo -->
+          <div style="margin-top:14px; background:rgba(0,0,0,0.3); padding:10px; border-radius:10px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:6px;">TRY VOICE COMMAND SAMPLE:</div>
+            <button class="sim-btn" style="width:100%; font-size:0.8rem; text-align:left;" onclick="playVoiceSample()">
+              🗣️ "नमस्ते, मेरे घर का पंखा नहीं चल रहा, इलेक्ट्रीशियन चाहिए"
+            </button>
+            <div id="voiceOutput" style="margin-top:8px; font-size:0.78rem; color:var(--emerald); display:none;">
+              ✅ Recognized Intent: <code>{ skill: "Electrician", task: "Ceiling Fan Repair", lang: "hi" }</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Lexi RAG Autonomous Agent -->
+        <div class="card accent-purple">
+          <div class="card-title" style="color:var(--purple);">🤖 Lexi RAG & Autonomous Tool Calling</div>
+          
+          <ul class="bullet-list">
+            <li><strong>RAG Knowledge Indexing:</strong> Embeds service rate cards, warranty policies, and safety rules.</li>
+            <li><strong>Autonomous Function Calling:</strong> Direct execution of <code>searchWorkers()</code> and <code>bookService()</code>.</li>
+            <li><strong>Interactive UI Message Cards:</strong> Chat returns interactive booking action widgets directly inside dialogue.</li>
+          </ul>
+
+          <div class="live-code-box" style="margin-top:14px;">
+<span style="color:#f59e0b;">// Lexi Agent Autonomous Execution</span>
+<span style="color:#a855f7;">const</span> intent = <span style="color:#38bdf8;">await</span> classifyWithRAG(userQuery);
+<span style="color:#a855f7;">if</span> (intent.requiresTool) {
+  <span style="color:#a855f7;">return</span> <span style="color:#38bdf8;">await</span> tools.dispatchEmergencyMechanic({
+    gps: [28.6139, 77.2090],
+    vehicle: <span style="color:#10b981;">"Car Battery Stall"</span>
+  });
+}
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 6: QuickFix DIY & Brand Helplines
+         ========================================== -->
+    <section class="slide" data-slide="6">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>🛠️</span> VALUE-ADD UTILITIES</div>
+          <h2 class="slide-title">QuickFix Interactive DIY & Official Brand Directory</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>🛡️</span> 100% Anti-Fraud Verified
+        </div>
+      </div>
+
+      <div class="grid-2">
+        
+        <!-- QuickFix DIY Tree -->
+        <div class="card accent-amber">
+          <div class="card-title" style="color:var(--amber);">🛠️ QuickFix Step-by-Step Diagnostic Trees</div>
+          <div class="card-desc" style="margin-bottom:12px;">
+            Interactive decision trees allowing users to safely resolve minor household & vehicle issues before spending money on callouts.
+          </div>
+
+          <!-- Diagnostic Steps Visualizer -->
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:8px; border-left:3px solid var(--amber); font-size:0.85rem;">
+              <strong>Step 1: Check MCB Switch</strong> — Is the master circuit breaker tripped?
+            </div>
+            <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:8px; border-left:3px solid var(--amber); font-size:0.85rem;">
+              <strong>Step 2: Safety Isolation</strong> — Turn off main inverter before touching socket.
+            </div>
+            <div style="background:rgba(239,68,68,0.15); border:1px solid var(--sos); padding:8px 12px; border-radius:8px; font-size:0.82rem; color:#fca5a5;">
+              ⚠️ <strong>High Voltage Warning:</strong> If burning smell persists, immediately escalate to verified electrician!
+            </div>
+          </div>
+        </div>
+
+        <!-- Official Brand Directory -->
+        <div class="card accent-cyan">
+          <div class="card-title" style="color:var(--cyan);">📞 50+ Verified Brand Toll-Free Directory</div>
+          <div class="card-desc" style="margin-bottom:12px;">
+            Protects users from fraudulent fake customer care numbers on search engines. Direct 1-tap call to official warranty centers.
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; border:1px solid var(--card-border);">
+              <div style="font-weight:700; color:#fff;">🚗 Maruti Suzuki SOS</div>
+              <div style="color:var(--cyan); font-size:0.85rem; font-weight:600;">1800-102-1800</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">24x7 Roadside Assistance</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; border:1px solid var(--card-border);">
+              <div style="font-weight:700; color:#fff;">🚙 Hyundai Roadside</div>
+              <div style="color:var(--cyan); font-size:0.85rem; font-weight:600;">1800-102-4645</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Towing & Battery Jump</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; border:1px solid var(--card-border);">
+              <div style="font-weight:700; color:#fff;">❄️ Voltas / AC Care</div>
+              <div style="color:var(--cyan); font-size:0.85rem; font-weight:600;">1860-599-4555</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Appliance Warranty Desk</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; border:1px solid var(--card-border);">
+              <div style="font-weight:700; color:#fff;">⚡ Havells Care</div>
+              <div style="color:var(--cyan); font-size:0.85rem; font-weight:600;">1800-103-1313</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Certified Electricians</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 7: Full-Stack Architecture
+         ========================================== -->
+    <section class="slide" data-slide="7">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>⚙️</span> SYSTEM ENGINEERING</div>
+          <h2 class="slide-title">Full-Stack Architecture & Data Pipeline</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>⚡</span> Next.js 14 + Node + OpenRouter
+        </div>
+      </div>
+
+      <div class="grid-3">
+        
+        <!-- Frontend -->
+        <div class="card accent-blue">
+          <div class="card-title" style="color:var(--primary);">🎨 Client / Presentation Layer</div>
+          <ul class="bullet-list">
+            <li><strong>Next.js 14 App Router:</strong> Server-side rendering & optimized routing.</li>
+            <li><strong>React 18 & TypeScript:</strong> Type-safe interactive state machines.</li>
+            <li><strong>TailwindCSS + Framer:</strong> Glassmorphic micro-animations.</li>
+            <li><strong>Web Speech API:</strong> Native low-latency voice STT/TTS.</li>
+          </ul>
+        </div>
+
+        <!-- Backend -->
+        <div class="card accent-emerald">
+          <div class="card-title" style="color:var(--emerald);">⚙️ Backend & API Gateway</div>
+          <ul class="bullet-list">
+            <li><strong>Node.js & Express:</strong> High-concurrency RESTful dispatch endpoints.</li>
+            <li><strong>Mongoose ODM:</strong> GeoJSON 2dsphere indexing queries.</li>
+            <li><strong>Supabase Auth:</strong> Secure phone OTP authentication.</li>
+            <li><strong>Rate Limiter & CORS:</strong> Enterprise DDoS & API protections.</li>
+          </ul>
+        </div>
+
+        <!-- AI & Cloud Data -->
+        <div class="card accent-purple">
+          <div class="card-title" style="color:var(--purple);">🧠 AI & Data Layer</div>
+          <ul class="bullet-list">
+            <li><strong>OpenRouter LLM:</strong> High-reasoning intent & tool extraction.</li>
+            <li><strong>Custom RAG Vector Engine:</strong> Cosine similarity on markdown docs.</li>
+            <li><strong>MongoDB Atlas:</strong> Scalable document store for workers & jobs.</li>
+            <li><strong>Hydration Cache:</strong> Optimistic offline sync for spotty signals.</li>
+          </ul>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 8: Persona User Storyboard
+         ========================================== -->
+    <section class="slide" data-slide="8">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>📖</span> USER JOURNEY STORYBOARD</div>
+          <h2 class="slide-title">Priya & Vikram: The Synchronized 5-Step Story</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>🌟</span> End-to-End Experience
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:12px; flex:1;">
+        
+        <!-- Step 1 -->
+        <div class="card accent-sos" style="flex-direction:row; align-items:center; gap:16px; padding:12px 18px;">
+          <div style="font-weight:900; font-size:1.3rem; color:var(--sos); background:rgba(239,68,68,0.15); padding:8px 14px; border-radius:10px;">01</div>
+          <div style="flex:1;">
+            <div style="font-weight:700; color:#fff;">Emergency Alert Triggered</div>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Priya is stranded on the bypass road with a flat tyre. She opens Skill-Link and taps the red "SOS Emergency" button.</div>
+          </div>
+          <div style="font-size:1.4rem;">👩‍💼📱</div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="card accent-cyan" style="flex-direction:row; align-items:center; gap:16px; padding:12px 18px;">
+          <div style="font-weight:900; font-size:1.3rem; color:var(--cyan); background:rgba(56,189,248,0.15); padding:8px 14px; border-radius:10px;">02</div>
+          <div style="flex:1;">
+            <div style="font-weight:700; color:#fff;">GPS Auto-Lock & Geo-Radius Query</div>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Lexi AI detects exact coordinates (28.6139° N, 77.2090° E) and executes <code>geoWithin(5km)</code> query on available mechanics.</div>
+          </div>
+          <div style="font-size:1.4rem;">🛰️🤖</div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="card accent-amber" style="flex-direction:row; align-items:center; gap:16px; padding:12px 18px;">
+          <div style="font-weight:900; font-size:1.3rem; color:var(--amber); background:rgba(245,158,11,0.15); padding:8px 14px; border-radius:10px;">03</div>
+          <div style="flex:1;">
+            <div style="font-weight:700; color:#fff;">15-Second Ticket Auto-Lock</div>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Vikram (verified mobile mechanic 1.8 km away) accepts the alert on his worker app within 6 seconds. Ticket locked!</div>
+          </div>
+          <div style="font-size:1.4rem;">👷‍♂️⚡</div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="card accent-emerald" style="flex-direction:row; align-items:center; gap:16px; padding:12px 18px;">
+          <div style="font-weight:900; font-size:1.3rem; color:var(--emerald); background:rgba(16,185,129,0.15); padding:8px 14px; border-radius:10px;">04</div>
+          <div style="flex:1;">
+            <div style="font-weight:700; color:#fff;">Rapid Arrival & Transparent On-Site Fix</div>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Vikram reaches in 12 minutes, replaces the punctured tyre, and inspects the spare. Fixed standard pricing applies.</div>
+          </div>
+          <div style="font-size:1.4rem;">🛵🔧</div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="card accent-purple" style="flex-direction:row; align-items:center; gap:16px; padding:12px 18px;">
+          <div style="font-weight:900; font-size:1.3rem; color:var(--purple); background:rgba(168,85,247,0.15); padding:8px 14px; border-radius:10px;">05</div>
+          <div style="flex:1;">
+            <div style="font-weight:700; color:#fff;">Direct Digital Signoff & 5-Star Rating</div>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Priya pays via UPI, receives instant 7-day guarantee invoice, and rates Vikram 5 stars. Both users win!</div>
+          </div>
+          <div style="font-size:1.4rem;">⭐🛡️</div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 9: Database Modeling & Geo-Spatial
+         ========================================== -->
+    <section class="slide" data-slide="9">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>🗄️</span> DATA ARCHITECTURE</div>
+          <h2 class="slide-title">MongoDB Schema Modeling & Geo-Spatial Indexing</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>🌍</span> 2dsphere Geo-Query
+        </div>
+      </div>
+
+      <div class="grid-3">
+        
+        <div class="card accent-blue">
+          <div class="card-title" style="color:var(--primary);">👤 Worker Model</div>
+          <div class="live-code-box" style="max-height:180px;">
+{
+  name: "Vikram Sharma",
+  phone: "+919876543210",
+  skills: ["Mechanic", "Puncture"],
+  hourlyRate: 350,
+  rating: 4.9,
+  isVerified: true,
+  isAvailable: true,
+  location: {
+    type: "Point",
+    coordinates: [77.2090, 28.6139] <span style="color:#f59e0b;">// [lng, lat]</span>
+  }
+}
+          </div>
+        </div>
+
+        <div class="card accent-sos">
+          <div class="card-title" style="color:var(--sos);">🚨 Booking & SOS Model</div>
+          <div class="live-code-box" style="max-height:180px;">
+{
+  bookingId: "SOS-8921-X",
+  customer: ObjectId("..."),
+  worker: ObjectId("..."),
+  mode: "ON_ROAD_SOS",
+  urgency: "HIGH",
+  dispatchStatus: "EN_ROUTE",
+  etaMinutes: 12,
+  priceLock: 450,
+  createdAt: ISODate()
+}
+          </div>
+        </div>
+
+        <div class="card accent-purple">
+          <div class="card-title" style="color:var(--purple);">📚 RAG Knowledge Chunk</div>
+          <div class="live-code-box" style="max-height:180px;">
+{
+  docTitle: "Rate Card - Roadside",
+  category: "PRICING_POLICY",
+  chunkText: "Standard tyre puncture fix is ₹250 flat within 5km radius...",
+  embeddingVector: [0.012, -0.045, ...],
+  lastIndexed: ISODate()
+}
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 10: Market Comparison & Impact
+         ========================================== -->
+    <section class="slide" data-slide="10">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>📊</span> COMPETITIVE EDGE</div>
+          <h2 class="slide-title">Market Differentiation & Real Impact</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>🏆</span> Market Leader
+        </div>
+      </div>
+
+      <table class="comp-table">
+        <thead>
+          <tr>
+            <th>Key Metric / Capability</th>
+            <th style="color:var(--sos);">Traditional Apps (Urban Company / JustDial)</th>
+            <th style="color:var(--emerald);">Skill-Link Platform</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Emergency Highway Roadside SOS</strong></td>
+            <td><span class="status-cross">❌</span> Not Supported (Scheduled Home Only)</td>
+            <td><span class="status-check">✅</span> 15-Minute Priority GPS Dispatch</td>
+          </tr>
+          <tr>
+            <td><strong>Multilingual Vernacular Voice Engine</strong></td>
+            <td><span class="status-cross">❌</span> Complex English text forms</td>
+            <td><span class="status-check">✅</span> Sahayak Voice (Hindi + English)</td>
+          </tr>
+          <tr>
+            <td><strong>Autonomous AI Reasoning (RAG + Tools)</strong></td>
+            <td><span class="status-cross">❌</span> Hardcoded FAQ chatbots</td>
+            <td><span class="status-check">✅</span> Lexi AI with live DB function calls</td>
+          </tr>
+          <tr>
+            <td><strong>Interactive Self-Troubleshooting DIY</strong></td>
+            <td><span class="status-cross">❌</span> None (forces expensive booking)</td>
+            <td><span class="status-check">✅</span> QuickFix Step-by-Step Diagnostic Trees</td>
+          </tr>
+          <tr>
+            <td><strong>Worker Commission Cut</strong></td>
+            <td><span class="status-cross">⚠️</span> High (20% – 35% commission penalty)</td>
+            <td><span class="status-check">✅</span> Fair 0% – 5% Transparent Direct Model</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Impact Stats Bar -->
+      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-top:14px;">
+        <div style="background:rgba(56,189,248,0.1); border:1px solid var(--cyan); padding:10px; border-radius:12px; text-align:center;">
+          <div style="font-size:1.6rem; font-weight:800; color:var(--cyan);">15 Mins</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Avg Highway SOS Response</div>
+        </div>
+        <div style="background:rgba(16,185,129,0.1); border:1px solid var(--emerald); padding:10px; border-radius:12px; text-align:center;">
+          <div style="font-size:1.6rem; font-weight:800; color:var(--emerald);">100%</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Verified Background Checked</div>
+        </div>
+        <div style="background:rgba(168,85,247,0.1); border:1px solid var(--purple); padding:10px; border-radius:12px; text-align:center;">
+          <div style="font-size:1.6rem; font-weight:800; color:var(--purple);">&lt;80 ms</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Lexi RAG Vector Search</div>
+        </div>
+        <div style="background:rgba(245,158,11,0.1); border:1px solid var(--amber); padding:10px; border-radius:12px; text-align:center;">
+          <div style="font-size:1.6rem; font-weight:800; color:var(--amber);">0% Markup</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Transparent Direct Rates</div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 11: Interactive Live Simulator
+         ========================================== -->
+    <section class="slide" data-slide="11">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>🎮</span> LIVE DEMO SIMULATION</div>
+          <h2 class="slide-title">Interactive Real-Time Platform Simulator</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>⚡</span> Live Action Triggers
+        </div>
+      </div>
+
+      <div class="grid-2">
+        
+        <!-- Simulation Control Center -->
+        <div class="card accent-cyan">
+          <div class="card-title" style="color:var(--cyan);">🕹️ Click to Trigger Live Scenarios:</div>
+          <div style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+            <button class="sim-btn" onclick="runSimScenario('sos')">
+              🚨 Trigger Highway Tyre Emergency (Priya)
+            </button>
+            <button class="sim-btn" onclick="runSimScenario('voice')">
+              🎙️ Speak Hindi Voice Booking to Sahayak
+            </button>
+            <button class="sim-btn" onclick="runSimScenario('lexi')">
+              🤖 Ask Lexi AI: "Find Electrician under ₹400"
+            </button>
+          </div>
+        </div>
+
+        <!-- Simulation Screen Output -->
+        <div class="card accent-purple">
+          <div class="card-title" style="color:var(--purple);">📺 Live Simulator Response Feed</div>
+          <div id="simScreen" class="live-code-box" style="height:170px; font-size:0.85rem; line-height:1.6;">
+            <span style="color:var(--text-muted);">[SYSTEM READY]: Click any trigger on the left to simulate live platform execution...</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ==========================================
+         SLIDE 12: Roadmap, Vision & Finale
+         ========================================== -->
+    <section class="slide" data-slide="12">
+      <div class="slide-header-row">
+        <div>
+          <div class="slide-tag"><span>🚀</span> THE ROAD AHEAD</div>
+          <h2 class="slide-title">Vision Roadmap & Grand Conclusion</h2>
+        </div>
+        <div class="slide-character-badge">
+          <span>✨</span> Future Scale
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:12px; flex:1;">
+        
+        <div class="grid-3">
+          <div class="card accent-blue">
+            <div class="card-title" style="color:var(--primary);">🚀 Phase 1: Live WebSocket Map</div>
+            <div class="card-desc">Real-time GPS turn-by-turn tracking of mobile mechanics with precise WebSocket broadcast and live telemetry.</div>
+          </div>
+          <div class="card accent-emerald">
+            <div class="card-title" style="color:var(--emerald);">🌐 Phase 2: 8 Indian Languages</div>
+            <div class="card-desc">Expanding Sahayak Voice engine to Marathi, Bengali, Tamil, Telugu, and Kannada with local dialect acoustic models.</div>
+          </div>
+          <div class="card accent-purple">
+            <div class="card-title" style="color:var(--purple);">🚗 Phase 3: IoT OBD-II Telemetry</div>
+            <div class="card-desc">Proactive vehicle diagnostic dongle integration that detects battery & engine faults before breakdown occurs.</div>
+          </div>
+        </div>
+
+        <!-- Grand Finale Banner -->
+        <div class="card accent-amber" style="background:linear-gradient(135deg, rgba(30,41,59,0.95), rgba(15,23,42,0.98)); padding:20px; text-align:center; align-items:center; margin-top:auto;">
+          <div style="font-size:1.5rem; font-weight:900; color:#fff; margin-bottom:6px;">
+            ✨ Skill-Link: Empowering Workers • Safeguarding Commuters • Driving AI Inclusion
+          </div>
+          <div style="color:var(--cyan); font-size:0.95rem; font-weight:600;">
+            Thank You! Open for Questions & Live Demonstration
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Speaker Notes Overlay Modal -->
+  <div id="speakerNotesModal">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <span style="font-weight:800; color:var(--cyan); font-size:0.9rem;">📝 SPEAKER NOTES (SLIDE <span id="notesSlideNum">1</span>)</span>
+      <button onclick="toggleNotes()" style="background:none; border:none; color:#fff; cursor:pointer; font-size:1rem;">✕</button>
+    </div>
+    <div id="speakerNotesContent" style="font-size:0.85rem; color:#cbd5e1; line-height:1.5; max-height:220px; overflow-y:auto;">
+      Welcome the evaluators. Highlight that Skill-Link solves a critical real-world problem: 15-minute roadside emergencies combined with transparent home services powered by AI.
+    </div>
+  </div>
+
+  <!-- Bottombar -->
+  <footer class="bottombar">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="btn" onclick="prevSlide()">◀ Prev</button>
+      <button class="btn" onclick="nextSlide()">Next ▶</button>
+      <span style="color:var(--text-muted); font-size:0.85rem; margin-left:10px;">
+        Slide <span id="currentSlideNum" style="color:#fff; font-weight:700;">1</span> / <span id="totalSlideNum">12</span>
+      </span>
+    </div>
+    
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <div class="shortcuts-hint">
+      Keys: <kbd>◀</kbd> <kbd>▶</kbd> Navigate | <kbd>L</kbd> Laser | <kbd>N</kbd> Notes | <kbd>A</kbd> Autoplay | <kbd>F</kbd> Fullscreen
+    </div>
+  </footer>
+
+  <!-- Script Engine -->
+  <script>
+    // Slide Navigation
+    let currentSlide = 1;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    document.getElementById('totalSlideNum').innerText = totalSlides;
+
+    // Speaker Notes Data per slide
+    const speakerNotes = {
+      1: "Welcome the panel. Emphasize that Skill-Link is not just another directory—it is an intelligent autonomous ecosystem featuring on-road SOS, multilingual voice AI, and fair-wage worker matchmaking.",
+      2: "Focus on the real-world pain point: Highway breakdowns leave commuters stranded at night without transparent help. Highlight the language gap for non-English speakers.",
+      3: "Explain the unified marketplace structure: dual-mode home services vs urgent SOS, with Lexi AI acting as the central autonomous routing hub.",
+      4: "Walk through the 15-minute SOS radar mechanism. Point out how high-accuracy GPS coordinates and the 15-second auto-lock ensure verified mechanics arrive rapidly.",
+      5: "Demonstrate Sahayak Voice AI and Lexi RAG. Show how Hindi voice queries are parsed into structured DB queries without manual typing.",
+      6: "Highlight QuickFix DIY guides and the verified brand directory. This prevents users from falling victim to fake scam phone numbers online.",
+      7: "Explain the modern full-stack tech architecture: Next.js 14 App Router, Express/Node.js backend, OpenRouter LLMs, and MongoDB GeoJSON indexing.",
+      8: "Walk through the 5-step synchronized user story between Priya (the customer) and Vikram (the mechanic).",
+      9: "Detail the database schemas and 2dsphere geo-spatial query calculations.",
+      10: "Emphasize key competitive advantages over legacy apps: 15-minute SOS, voice AI, 0-5% fair commission, and transparent rate cards.",
+      11: "Use the live simulator buttons to demonstrate the autonomous triggers right during your presentation.",
+      12: "Conclude with the future vision: WebSocket live tracking, 8 Indian languages, and IoT vehicle fault diagnosis. Invite questions."
+    };
+
+    // Web Audio Sound Engine
+    let soundEnabled = true;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSynthBeep(freq = 440, type = 'sine', duration = 0.15) {
+      if (!soundEnabled) return;
+      try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundBtn').innerText = soundEnabled ? '🔊 SFX' : '🔇 SFX Muted';
+    }
+
+    function showSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      slides.forEach((s, idx) => {
+        if (idx + 1 === currentSlide) {
+          s.classList.add('active');
+        } else {
+          s.classList.remove('active');
+        }
+      });
+
+      document.getElementById('currentSlideNum').innerText = currentSlide;
+      document.getElementById('progressFill').style.width = ((currentSlide / totalSlides) * 100) + '%';
+      
+      // Update Notes
+      document.getElementById('notesSlideNum').innerText = currentSlide;
+      document.getElementById('speakerNotesContent').innerText = speakerNotes[currentSlide] || "No notes for this slide.";
+
+      playSynthBeep(520, 'sine', 0.12);
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        showSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        showSlide(currentSlide - 1);
+      }
+    }
+
+    // Fullscreen
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    // Notes Toggle
+    function toggleNotes() {
+      const modal = document.getElementById('speakerNotesModal');
+      modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Laser Pointer Toggle
+    let laserActive = false;
+    const laserEl = document.getElementById('laserPointer');
+    function toggleLaser() {
+      laserActive = !laserActive;
+      laserEl.style.display = laserActive ? 'block' : 'none';
+      document.getElementById('laserBtn').style.background = laserActive ? '#ef4444' : '';
+    }
+
+    document.addEventListener('mousemove', (e) => {
+      if (laserActive) {
+        laserEl.style.left = e.clientX + 'px';
+        laserEl.style.top = e.clientY + 'px';
+      }
+    });
+
+    // Autoplay Mode
+    let autoplayTimer = null;
+    function toggleAutoplay() {
+      const btn = document.getElementById('autoplayBtn');
+      if (autoplayTimer) {
+        clearInterval(autoplayTimer);
+        autoplayTimer = null;
+        btn.innerText = '▶ Autoplay';
+        btn.style.background = '';
+      } else {
+        btn.innerText = '⏸ Pause';
+        btn.style.background = '#10b981';
+        autoplayTimer = setInterval(() => {
+          if (currentSlide >= totalSlides) {
+            showSlide(1);
+          } else {
+            nextSlide();
+          }
+        }, 5000);
+      }
+    }
+
+    // Character Speech Quotes
+    const characterDialogues = {
+      vikram: "👷‍♂️ Vikram: 'Main 15 minute me toolkit lekar pohoch raha hu. Direct fixed rate, koi extra commission nahi!'",
+      priya: "👩‍💼 Priya: 'Sahayak Voice made it so easy to get emergency roadside help on the highway without panic!'",
+      lexi: "🤖 Lexi AI: 'Processed query vector in 64ms. Dispatched closest top-rated verified mechanic.'",
+      suraksha: "🛡️ Suraksha Shield: '100% ID-verified professionals, locked upfront rates, and 7-day guarantee!'"
+    };
+
+    function triggerCharacterQuote(char) {
+      alert(characterDialogues[char] || "Skill-Link Character Persona");
+      playSynthBeep(600, 'triangle', 0.2);
+    }
+
+    // SOS Dispatch Simulation
+    function simulateSosDispatch() {
+      const marker = document.getElementById('mechanicMarker');
+      const timer = document.getElementById('sosTimer');
+      if (!marker) return;
+      marker.style.left = '38%';
+      marker.style.top = '44%';
+      timer.innerText = '02m 15s (Arriving!)';
+      playSynthBeep(880, 'square', 0.25);
+    }
+
+    function resetSosSim() {
+      const marker = document.getElementById('mechanicMarker');
+      const timer = document.getElementById('sosTimer');
+      if (!marker) return;
+      marker.style.left = '75%';
+      marker.style.top = '42%';
+      timer.innerText = '12m 40s';
+    }
+
+    // Voice Sample Trigger
+    function playVoiceSample() {
+      const out = document.getElementById('voiceOutput');
+      if (out) {
+        out.style.display = 'block';
+        playSynthBeep(587, 'sine', 0.2);
+      }
+    }
+
+    // Live Scenario Simulator for Slide 11
+    function runSimScenario(type) {
+      const screen = document.getElementById('simScreen');
+      if (!screen) return;
+      playSynthBeep(700, 'triangle', 0.15);
+
+      if (type === 'sos') {
+        screen.innerHTML = `
+<span style="color:#ef4444; font-weight:bold;">🚨 [SOS TRIGGERED]</span>: Priya reported flat tyre on NH-48 Km 32.
+<span style="color:#38bdf8;">[GEO-LOCATION]</span>: Lat 28.5355, Lng 77.3910 (Precision: 8m)
+<span style="color:#f59e0b;">[AUTO-BROADCAST]</span>: Pinging 3 nearest mobile mechanics...
+<span style="color:#10b981;">[LOCKED]</span>: Vikram Sharma (1.8km away) accepted in 4.2s. ETA: 11 mins!
+        `;
+      } else if (type === 'voice') {
+        screen.innerHTML = `
+<span style="color:#10b981; font-weight:bold;">🎙️ [VOICE INPUT]</span>: "मुझे पंखा ठीक करने के लिए इलेक्ट्रीशियन चाहिए"
+<span style="color:#38bdf8;">[STT TOKENS]</span>: ["electrician", "ceiling_fan_repair", "hindi_vernacular"]
+<span style="color:#a855f7;">[MATCH]</span>: Found 4 certified electricians within 3 km.
+<span style="color:#f59e0b;">[SPEECH SYNTH]</span>: "जी हाँ, 3 इलेक्ट्रीशियन उपलब्ध हैं। क्या मैं ₹300 में बुक करूँ?"
+        `;
+      } else if (type === 'lexi') {
+        screen.innerHTML = `
+<span style="color:#a855f7; font-weight:bold;">🤖 [LEXI RAG QUERY]</span>: "Find Electrician under ₹400"
+<span style="color:#38bdf8;">[VECTOR COSINE]</span>: Similarity score 0.94 on rate_cards_2026.md
+<span style="color:#10b981;">[TOOL CALL]</span>: searchWorkers({ skill: "Electrician", maxPrice: 400 })
+<span style="color:#f59e0b;">[RESULT]</span>: 2 Top Pros available. Direct interactive booking card generated!
+        `;
+      }
+    }
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      } else if (e.key === 'l' || e.key === 'L') {
+        toggleLaser();
+      } else if (e.key === 'n' || e.key === 'N') {
+        toggleNotes();
+      } else if (e.key === 'a' || e.key === 'A') {
+        toggleAutoplay();
+      } else if (e.key === 'p' || e.key === 'P') {
+        window.print();
+      }
+    });
+
+    // Touch Swipes
+    let touchStartX = 0;
+    let touchEndX = 0;
+    document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; });
+    document.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      if (touchStartX - touchEndX > 50) nextSlide();
+      if (touchEndX - touchStartX > 50) prevSlide();
+    });
+
+    // Ambient Star Particle Canvas
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    const particles = Array.from({ length: 45 }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      radius: Math.random() * 1.6 + 0.5,
+      speedX: (Math.random() - 0.5) * 0.4,
+      speedY: (Math.random() - 0.5) * 0.4,
+      alpha: Math.random() * 0.6 + 0.2
+    }));
+
+    function drawParticles() {
+      ctx.clearRect(0, 0, width, height);
+      particles.forEach(p => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(56, 189, 248, ${p.alpha})`;
+        ctx.fill();
+      });
+      requestAnimationFrame(drawParticles);
+    }
+    drawParticles();
+  </script>
+</body>
+</html>

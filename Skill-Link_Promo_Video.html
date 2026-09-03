@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skill-Link — Official Animated Platform Promo & Advertisement Video</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #050811;
+      --primary: #2563eb;
+      --cyan: #38bdf8;
+      --sos: #ef4444;
+      --amber: #f59e0b;
+      --emerald: #10b981;
+      --purple: #a855f7;
+      --pink: #ec4899;
+      --text: #f8fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #02040a;
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Video Frame Container (16:9 Aspect Ratio) */
+    .video-viewport {
+      position: relative;
+      width: min(1200px, 94vw);
+      height: min(675px, 80vh);
+      background: radial-gradient(circle at center, #0d1527 0%, #050811 100%);
+      border: 2px solid rgba(56, 189, 248, 0.3);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.9), 0 0 40px rgba(37, 99, 235, 0.2);
+    }
+
+    /* Canvas for animated particle effects & background motion */
+    #fxCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Video Scenes Stage */
+    .scene-stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+    }
+
+    .scene {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 40px 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.96) translateY(20px);
+      transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+    }
+
+    .scene.active {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+    }
+
+    /* Badges & Kinetic Typography */
+    .promo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+      animation: pulseGlow 2s infinite;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+
+    .scene-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 3.2rem;
+      font-weight: 900;
+      text-align: center;
+      line-height: 1.1;
+      margin-bottom: 16px;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, #93c5fd 70%, #38bdf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .scene-subtitle {
+      font-size: 1.25rem;
+      font-weight: 600;
+      text-align: center;
+      max-width: 850px;
+      color: #cbd5e1;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+
+    /* Animated Scene Visual Containers */
+    .visual-box {
+      width: 100%;
+      max-width: 900px;
+      height: 280px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    /* Video Player Overlay HUD & Controls */
+    .video-hud {
+      position: absolute;
+      top: 20px;
+      left: 30px;
+      right: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    .rec-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(239, 68, 68, 0.6);
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: #ef4444;
+    }
+
+    .rec-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    .scene-counter {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    /* Bottom Video Controller Bar */
+    .video-controller {
+      width: min(1200px, 94vw);
+      margin-top: 14px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      backdrop-filter: blur(16px);
+    }
+
+    .play-btn {
+      background: linear-gradient(135deg, #2563eb, #38bdf8);
+      border: none;
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 0 15px rgba(37, 99, 235, 0.5);
+      transition: all 0.2s;
+    }
+
+    .play-btn:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.8);
+    }
+
+    .rec-btn {
+      background: linear-gradient(135deg, #dc2626, #ef4444);
+      border: none;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .rec-btn:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+    }
+
+    .timeline-bar {
+      flex: 1;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .timeline-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2563eb, #38bdf8, #a855f7);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    /* Specific Scene Animations */
+    /* Scene 1: Night Highway & Breakdown */
+    .road-track {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      height: 60px;
+      background: #1e293b;
+      border-top: 3px solid #64748b;
+      overflow: hidden;
+    }
+
+    .road-lane-lines {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 200%;
+      height: 4px;
+      background: repeating-linear-gradient(90deg, #facc15 0px, #facc15 30px, transparent 30px, transparent 70px);
+      animation: roadMove 1.5s linear infinite;
+    }
+
+    @keyframes roadMove {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-70px); }
+    }
+
+    /* Radar Pulse in Scene 2 */
+    .radar-circle {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px dashed rgba(239, 68, 68, 0.4);
+      animation: expandRadar 3s infinite linear;
+    }
+
+    @keyframes expandRadar {
+      0% { width: 30px; height: 30px; opacity: 1; }
+      100% { width: 450px; height: 450px; opacity: 0; }
+    }
+
+    /* Subtitles Caption Bar */
+    .caption-bar {
+      position: absolute;
+      bottom: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(5, 8, 17, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      padding: 10px 24px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      text-align: center;
+      max-width: 80%;
+      z-index: 60;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      animation: subtitlePop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes subtitlePop {
+      0% { transform: translate(-50%, 15px); opacity: 0; }
+      100% { transform: translate(-50%, 0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Video Viewport -->
+  <div class="video-viewport" id="videoViewport">
+    
+    <!-- Ambient Particle Canvas -->
+    <canvas id="fxCanvas"></canvas>
+
+    <!-- Top Video HUD -->
+    <div class="video-hud">
+      <div class="rec-indicator">
+        <div class="rec-dot"></div>
+        <span>4K ULTRA HD • PROMO</span>
+      </div>
+      <div style="font-weight: 800; font-size: 1.1rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+        <span style="color:var(--cyan);">⚡</span> SKILL-LINK OFFICIAL PROMO
+      </div>
+      <div class="scene-counter" id="sceneCounter">SCENE 1 / 6</div>
+    </div>
+
+    <!-- Scenes Stage -->
+    <div class="scene-stage">
+
+      <!-- ==========================================
+           SCENE 1: The Problem (Highway Breakdown at 9 PM)
+           ========================================== -->
+      <div class="scene active" id="scene1" data-duration="5500">
+        <div class="promo-badge" style="background:rgba(239,68,68,0.2); border:1px solid var(--sos); color:var(--sos);">
+          ⚠️ THE ROADSIDE NIGHTMARE
+        </div>
+        <h1 class="scene-title">Stranded on a Dark Highway at 9 PM?</h1>
+        <p class="scene-subtitle">
+          Tyre blowout, dead battery, or unexpected engine breakdown. No mechanics in sight. Unregulated surge pricing and safety risks.
+        </p>
+
+        <div class="visual-box" style="border-color:var(--sos); background:radial-gradient(circle at 30% 70%, rgba(239,68,68,0.2) 0%, transparent 60%);">
+          <!-- Car Breakdown Illustration -->
+          <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
+            
+            <!-- Broken Car SVG -->
+            <svg width="220" height="120" viewBox="0 0 220 120" style="filter:drop-shadow(0 10px 20px rgba(0,0,0,0.8));">
+              <!-- Smoke Particles from Hood -->
+              <circle cx="50" cy="40" r="10" fill="rgba(148,163,184,0.4)">
+                <animate attributeName="cy" values="40;10;0" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.8;0.2;0" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="r" values="10;22;30" dur="2s" repeatCount="indefinite" />
+              </circle>
+              <!-- Car Body -->
+              <path d="M20,70 L45,45 L135,45 L170,70 L205,70 L205,95 L15,95 Z" fill="#dc2626" />
+              <rect x="50" y="48" width="40" height="20" rx="3" fill="#38bdf8" opacity="0.8" />
+              <rect x="95" y="48" width="35" height="20" rx="3" fill="#38bdf8" opacity="0.8" />
+              <circle cx="55" cy="95" r="16" fill="#1e293b" stroke="#64748b" stroke-width="4" />
+              <!-- Flat Tyre (Deflated) -->
+              <ellipse cx="165" cy="100" rx="18" ry="11" fill="#0f172a" stroke="#ef4444" stroke-width="4" />
+              <!-- Hazard Lights Flashing -->
+              <circle cx="18" cy="78" r="5" fill="#f59e0b">
+                <animate attributeName="opacity" values="1;0.2;1" dur="0.8s" repeatCount="indefinite" />
+              </circle>
+            </svg>
+
+            <!-- Stranded Priya Character SVG -->
+            <svg width="100" height="150" viewBox="0 0 100 150" style="margin-left:40px;">
+              <circle cx="50" cy="40" r="30" fill="#312e81" />
+              <circle cx="50" cy="45" r="20" fill="#fcd34d" />
+              <circle cx="43" cy="43" r="2.5" fill="#1e293b" />
+              <circle cx="57" cy="43" r="2.5" fill="#1e293b" />
+              <path d="M43,55 Q50,50 57,55" stroke="#1e293b" stroke-width="2" fill="none" />
+              <path d="M25,70 L75,70 L82,120 L18,120 Z" fill="#ec4899" />
+              <!-- Phone with SOS Glow -->
+              <rect x="70" y="75" width="16" height="26" rx="3" fill="#0f172a" stroke="#ef4444" stroke-width="2" />
+              <circle cx="78" cy="88" r="4" fill="#ef4444">
+                <animate attributeName="opacity" values="0.4;1;0.4" dur="0.8s" repeatCount="indefinite" />
+              </circle>
+            </svg>
+
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==========================================
+           SCENE 2: The Skill-Link Solution (1-Tap 15-Min SOS)
+           ========================================== -->
+      <div class="scene" id="scene2" data-duration="5500">
+        <div class="promo-badge" style="background:rgba(56,189,248,0.2); border:1px solid var(--cyan); color:var(--cyan);">
+          ⚡ THE INSTANT RESCUE
+        </div>
+        <h1 class="scene-title">Skill-Link 15-Minute Priority SOS</h1>
+        <p class="scene-subtitle">
+          Instant high-accuracy GPS pinpointing. 15-second ticket auto-lock. Direct dispatch to the nearest verified mobile mechanic.
+        </p>
+
+        <div class="visual-box" style="border-color:var(--cyan); background:radial-gradient(circle at center, rgba(37,99,235,0.25) 0%, transparent 70%);">
+          <!-- Radar Visualizer -->
+          <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
+            <div class="radar-circle" style="animation-delay:0s;"></div>
+            <div class="radar-circle" style="animation-delay:1s;"></div>
+            <div class="radar-circle" style="animation-delay:2s;"></div>
+
+            <!-- Center GPS Hub -->
+            <div style="width:70px; height:70px; background:linear-gradient(135deg, #2563eb, #38bdf8); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.8rem; box-shadow:0 0 35px rgba(56,189,248,0.8); z-index:10;">
+              📍
+            </div>
+
+            <!-- Floating 15-Second Auto-Lock Badge -->
+            <div style="position:absolute; top:25px; right:40px; background:rgba(15,23,42,0.95); border:2px solid var(--sos); padding:8px 18px; border-radius:12px; font-weight:800; font-size:0.9rem; color:#fff; box-shadow:0 0 20px rgba(239,68,68,0.5);">
+              ⏱️ AUTO-LOCK: <span style="color:var(--sos);">00:14s</span>
+            </div>
+
+            <!-- Pro Mechanic Ping -->
+            <div style="position:absolute; bottom:30px; left:60px; background:rgba(15,23,42,0.95); border:1px solid var(--emerald); padding:6px 14px; border-radius:10px; font-size:0.8rem; color:var(--emerald); font-weight:700; display:flex; align-items:center; gap:6px;">
+              <span>🛵</span> Vikram Dispatched (1.8 km)
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==========================================
+           SCENE 3: Pro to the Rescue (Vikram Mechanics)
+           ========================================== -->
+      <div class="scene" id="scene3" data-duration="5500">
+        <div class="promo-badge" style="background:rgba(245,158,11,0.2); border:1px solid var(--amber); color:var(--amber);">
+          👷‍♂️ VERIFIED MOBILE PROS
+        </div>
+        <h1 class="scene-title">Rapid On-Site Repair & Transparent Pricing</h1>
+        <p class="scene-subtitle">
+          Certified technicians arrive with diagnostic toolkits. 100% upfront standardized rate cards with a 7-day warranty guarantee.
+        </p>
+
+        <div class="visual-box" style="border-color:var(--amber); background:radial-gradient(circle at center, rgba(245,158,11,0.15) 0%, transparent 70%);">
+          <!-- Mechanic Hero Arrival SVG -->
+          <div style="display:flex; align-items:center; justify-content:space-around; width:100%; padding:0 30px;">
+            
+            <!-- Vikram SVG -->
+            <svg width="120" height="160" viewBox="0 0 100 150">
+              <path d="M22,35 Q50,10 78,35 L82,42 L18,42 Z" fill="#f59e0b" />
+              <circle cx="50" cy="50" r="18" fill="#fcd34d" />
+              <circle cx="43" cy="48" r="2.5" fill="#1e293b" />
+              <circle cx="57" cy="48" r="2.5" fill="#1e293b" />
+              <path d="M40,56 Q50,62 60,56" stroke="#1e293b" stroke-width="2" fill="none" />
+              <path d="M26,68 L74,68 L78,122 L22,122 Z" fill="#2563eb" />
+              <path d="M34,68 L42,122 L58,122 L66,68 Z" fill="#facc15" />
+              <!-- Moving Wrench -->
+              <path d="M26,72 L12,95 L4,85 L8,80 L14,90" stroke="#94a3b8" stroke-width="4" fill="none" />
+              <rect x="32" y="122" width="12" height="25" fill="#1e293b" />
+              <rect x="56" y="122" width="12" height="25" fill="#1e293b" />
+            </svg>
+
+            <!-- Feature Highlight Pills -->
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div style="background:rgba(30,41,59,0.9); border:1px solid var(--emerald); padding:10px 18px; border-radius:12px; font-size:0.9rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:10px;">
+                <span style="color:var(--emerald); font-size:1.2rem;">✓</span> 100% Background Verified Workers
+              </div>
+              <div style="background:rgba(30,41,59,0.9); border:1px solid var(--amber); padding:10px 18px; border-radius:12px; font-size:0.9rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:10px;">
+                <span style="color:var(--amber); font-size:1.2rem;">🔒</span> Upfront Fixed Rates (0% Surge)
+              </div>
+              <div style="background:rgba(30,41,59,0.9); border:1px solid var(--cyan); padding:10px 18px; border-radius:12px; font-size:0.9rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:10px;">
+                <span style="color:var(--cyan); font-size:1.2rem;">🛡️</span> 7-Day Post-Service Guarantee
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==========================================
+           SCENE 4: Sahayak Multilingual Voice & Lexi AI
+           ========================================== -->
+      <div class="scene" id="scene4" data-duration="5500">
+        <div class="promo-badge" style="background:rgba(168,85,247,0.2); border:1px solid var(--purple); color:var(--purple);">
+          🤖 CONVERSATIONAL AI & VOICE
+        </div>
+        <h1 class="scene-title">Sahayak Voice AI & Autonomous Lexi Agent</h1>
+        <p class="scene-subtitle">
+          Zero typing required. Speak naturally in Hindi or English. Powered by RAG semantic vector intelligence and real-time backend tool calling.
+        </p>
+
+        <div class="visual-box" style="border-color:var(--purple); background:radial-gradient(circle at center, rgba(168,85,247,0.2) 0%, transparent 70%);">
+          <div style="display:flex; align-items:center; justify-content:space-around; width:100%; padding:0 20px;">
+            
+            <!-- Voice Wave Visual -->
+            <div style="background:rgba(15,23,42,0.9); border:1px solid var(--emerald); padding:16px; border-radius:16px; width:45%;">
+              <div style="font-size:0.8rem; color:var(--emerald); font-weight:800; margin-bottom:8px;">🎙️ SAHAYAK VOICE (HINDI / ENGLISH)</div>
+              <div style="font-size:0.95rem; font-weight:700; color:#fff; margin-bottom:10px;">
+                "नमस्ते, मुझे पंखा ठीक करने वाला चाहिए"
+              </div>
+              <div style="font-size:0.75rem; color:var(--text); background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;">
+                ➔ Extracted: <code>{ skill: "Electrician", task: "Fan Repair" }</code>
+              </div>
+            </div>
+
+            <!-- Lexi Robot Mascot SVG -->
+            <svg width="120" height="150" viewBox="0 0 110 150">
+              <line x1="55" y1="25" x2="55" y2="40" stroke="#38bdf8" stroke-width="3" />
+              <circle cx="55" cy="22" r="6" fill="#38bdf8" />
+              <rect x="25" y="40" width="60" height="42" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5" />
+              <rect x="33" y="48" width="44" height="22" rx="6" fill="#0284c7" />
+              <circle cx="45" cy="59" r="4" fill="#ffffff" />
+              <circle cx="65" cy="59" r="4" fill="#ffffff" />
+              <ellipse cx="55" cy="92" rx="36" ry="8" fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="4,4" />
+              <path d="M35,86 L75,86 L68,125 L42,125 Z" fill="#334155" stroke="#38bdf8" stroke-width="2" />
+            </svg>
+
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==========================================
+           SCENE 5: QuickFix DIY & 50+ Brand Helplines
+           ========================================== -->
+      <div class="scene" id="scene5" data-duration="5500">
+        <div class="promo-badge" style="background:rgba(16,185,129,0.2); border:1px solid var(--emerald); color:var(--emerald);">
+          🛠️ COMPLETE ECOSYSTEM
+        </div>
+        <h1 class="scene-title">QuickFix DIY & 50+ Brand Directory</h1>
+        <p class="scene-subtitle">
+          Guided diagnostic decision trees with safety alerts + official toll-free anti-fraud directory for Maruti, Hyundai, Tata, Samsung & Voltas.
+        </p>
+
+        <div class="visual-box" style="border-color:var(--emerald); background:radial-gradient(circle at center, rgba(16,185,129,0.15) 0%, transparent 70%);">
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; width:100%; padding:0 30px;">
+            
+            <div style="background:rgba(30,41,59,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:16px; text-align:center;">
+              <div style="font-size:2rem; margin-bottom:6px;">🛠️</div>
+              <div style="font-weight:700; color:#fff;">Interactive DIY</div>
+              <div style="font-size:0.75rem; color:var(--text); margin-top:4px;">Guided step-by-step troubleshooting trees</div>
+            </div>
+
+            <div style="background:rgba(30,41,59,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:16px; text-align:center;">
+              <div style="font-size:2rem; margin-bottom:6px;">📞</div>
+              <div style="font-weight:700; color:#fff;">50+ Brands</div>
+              <div style="font-size:0.75rem; color:var(--text); margin-top:4px;">Verified official toll-free directory</div>
+            </div>
+
+            <div style="background:rgba(30,41,59,0.8); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:16px; text-align:center;">
+              <div style="font-size:2rem; margin-bottom:6px;">🛡️</div>
+              <div style="font-weight:700; color:#fff;">0% Commission Cut</div>
+              <div style="font-size:0.75rem; color:var(--text); margin-top:4px;">Fair wages directly to hardworking pros</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ==========================================
+           SCENE 6: Grand Finale Call-to-Action
+           ========================================== -->
+      <div class="scene" id="scene6" data-duration="6000">
+        <div class="promo-badge" style="background:linear-gradient(135deg, #2563eb, #38bdf8); color:#fff;">
+          ✨ THE FUTURE IS HERE
+        </div>
+        <h1 class="scene-title" style="font-size:3.6rem;">Skill-Link</h1>
+        <p class="scene-subtitle" style="font-size:1.4rem; color:var(--cyan);">
+          Empowering Workers • Safeguarding Commuters • Driving AI Inclusion
+        </p>
+
+        <div style="display:flex; gap:16px; margin-top:10px;">
+          <a href="Skill-Link_Presentation_Deck.html" class="play-btn" style="text-decoration:none; font-size:1rem; padding:12px 24px;">
+            📊 Launch Presentation Deck
+          </a>
+          <a href="Skill-Link_Project_Presentation.pptx" download class="rec-btn" style="text-decoration:none; font-size:1rem; padding:12px 24px; background:linear-gradient(135deg, #10b981, #059669);">
+            📥 Download .PPTX Deck
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Subtitles Caption Bar -->
+    <div class="caption-bar" id="captionBar">
+      Welcome to Skill-Link: The AI-Powered Hyperlocal & On-Road Emergency Platform.
+    </div>
+
+  </div>
+
+  <!-- Video Controller Bar -->
+  <div class="video-controller">
+    <button class="play-btn" id="playToggleBtn" onclick="togglePlay()">
+      <span id="playIcon">⏸</span> <span id="playLabel">Pause</span>
+    </button>
+    <button class="rec-btn" id="recVideoBtn" onclick="recordPromoVideo()">
+      🎥 Record & Export Video (.webm)
+    </button>
+
+    <div class="timeline-bar" onclick="seekTimeline(event)">
+      <div class="timeline-fill" id="timelineFill"></div>
+    </div>
+
+    <button class="play-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15);" onclick="toggleFullscreen()">
+      ⛶ Fullscreen
+    </button>
+  </div>
+
+  <!-- Audio & Video Script Engine -->
+  <script>
+    const scenes = [
+      { id: 'scene1', caption: "🚨 Highway breakdown at night? Skill-Link solves the panic in seconds.", duration: 5500 },
+      { id: 'scene2', caption: "⚡ 1-Tap 15-Minute SOS: Live GPS lock and 15-second mechanic auto-lock.", duration: 5500 },
+      { id: 'scene3', caption: "👷‍♂️ Verified mobile mechanics arrive on-site with 100% transparent fixed rates.", duration: 5500 },
+      { id: 'scene4', caption: "🎙️ Sahayak Voice AI & Lexi RAG: Speak naturally in Hindi or English, zero typing.", duration: 5500 },
+      { id: 'scene5', caption: "🛠️ QuickFix DIY guides, 50+ official brand directory, and fair 0% worker commission.", duration: 5500 },
+      { id: 'scene6', caption: "✨ Skill-Link: Empowering Workers, Safeguarding Commuters, Driving AI Inclusion.", duration: 6000 }
+    ];
+
+    let currentSceneIndex = 0;
+    let isPlaying = true;
+    let sceneTimer = null;
+    let startTime = Date.now();
+    let totalDuration = scenes.reduce((acc, s) => acc + s.duration, 0);
+
+    // Web Audio Sound Synthesizer for Cinematic Promo
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSoundTone(freq, type = 'sine', dur = 0.2, gainVol = 0.1) {
+      try {
+        initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch(e) {}
+    }
+
+    function playCinematicTransition(idx) {
+      if (idx === 0) playSoundTone(300, 'sawtooth', 0.4, 0.08);
+      else if (idx === 1) playSoundTone(880, 'square', 0.3, 0.09);
+      else if (idx === 2) playSoundTone(520, 'triangle', 0.35, 0.1);
+      else if (idx === 3) playSoundTone(660, 'sine', 0.4, 0.1);
+      else if (idx === 4) playSoundTone(740, 'triangle', 0.35, 0.1);
+      else if (idx === 5) playSoundTone(980, 'sine', 0.6, 0.12);
+    }
+
+    function showScene(index) {
+      if (index < 0) index = 0;
+      if (index >= scenes.length) index = 0;
+      currentSceneIndex = index;
+
+      document.querySelectorAll('.scene').forEach((sc, i) => {
+        if (i === currentSceneIndex) sc.classList.add('active');
+        else sc.classList.remove('active');
+      });
+
+      document.getElementById('sceneCounter').innerText = `SCENE ${currentSceneIndex + 1} / ${scenes.length}`;
+      document.getElementById('captionBar').innerText = scenes[currentSceneIndex].caption;
+      
+      playCinematicTransition(currentSceneIndex);
+
+      if (isPlaying) {
+        clearTimeout(sceneTimer);
+        sceneTimer = setTimeout(() => {
+          showScene((currentSceneIndex + 1) % scenes.length);
+        }, scenes[currentSceneIndex].duration);
+      }
+    }
+
+    function togglePlay() {
+      initAudio();
+      isPlaying = !isPlaying;
+      const icon = document.getElementById('playIcon');
+      const label = document.getElementById('playLabel');
+      if (isPlaying) {
+        icon.innerText = '⏸';
+        label.innerText = 'Pause';
+        showScene(currentSceneIndex);
+      } else {
+        icon.innerText = '▶';
+        label.innerText = 'Play';
+        clearTimeout(sceneTimer);
+      }
+    }
+
+    function seekTimeline(e) {
+      const bar = e.currentTarget;
+      const rect = bar.getBoundingClientRect();
+      const clickPos = (e.clientX - rect.left) / rect.width;
+      const targetScene = Math.floor(clickPos * scenes.length);
+      showScene(targetScene);
+    }
+
+    function toggleFullscreen() {
+      const vp = document.getElementById('videoViewport');
+      if (!document.fullscreenElement) {
+        vp.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    // Timeline Progress Update
+    setInterval(() => {
+      if (isPlaying) {
+        const sceneDurationSumBefore = scenes.slice(0, currentSceneIndex).reduce((a, b) => a + b.duration, 0);
+        const percent = ((sceneDurationSumBefore + (scenes[currentSceneIndex].duration * 0.5)) / totalDuration) * 100;
+        document.getElementById('timelineFill').style.width = percent + '%';
+      }
+    }, 200);
+
+    // Interactive MediaRecorder Video Export
+    let isRecording = false;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+
+    async function recordPromoVideo() {
+      const btn = document.getElementById('recVideoBtn');
+      if (isRecording) {
+        mediaRecorder.stop();
+        btn.innerText = '🎥 Record & Export Video (.webm)';
+        btn.style.background = '';
+        isRecording = false;
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: 60 },
+          audio: true
+        });
+
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'Skill-Link_Platform_Advertisement_Video.webm';
+          a.click();
+          stream.getTracks().forEach(t => t.stop());
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        btn.innerText = '⏹ Stop & Save Video';
+        btn.style.background = '#10b981';
+        showScene(0);
+      } catch (err) {
+        alert("Recording prompt closed or not supported in this browser window. You can watch and present the video live in full screen!");
+      }
+    }
+
+    // Ambient Star Particle Canvas
+    const canvas = document.getElementById('fxCanvas');
+    const ctx = canvas.getContext('2d');
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    const particles = Array.from({ length: 35 }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      radius: Math.random() * 2 + 0.5,
+      speedX: (Math.random() - 0.5) * 0.5,
+      speedY: (Math.random() - 0.5) * 0.5,
+      alpha: Math.random() * 0.6 + 0.2
+    }));
+
+    function drawParticles() {
+      ctx.clearRect(0, 0, width, height);
+      particles.forEach(p => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(56, 189, 248, ${p.alpha})`;
+        ctx.fill();
+      });
+      requestAnimationFrame(drawParticles);
+    }
+    drawParticles();
+
+    // Start video on load
+    showScene(0);
+  </script>
+</body>
+</html>

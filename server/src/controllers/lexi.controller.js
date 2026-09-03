@@ -1,111 +1,90 @@
 /**
- * Lexi Master Controller
- * Multi-Provider AI Gateway (OpenRouter -> Gemini -> Groq -> Local Semantic Engine)
+ * Lexi AI Controller — Skill-Link Production Ready
+ * Production error boundary, request validation, privacy-safe logging, and memory lifecycle handlers.
  */
 
-const env = require("../config/env");
-const { callOpenRouterAI } = require("../services/openrouter.service");
-const { callGeminiAI } = require("../services/gemini.service");
-const { callGroqAI } = require("../services/groq.service");
+const { generateLexiResponse, resetConversationMemory } = require("../services/ai/ai.service");
 
-// Tools
-const searchWorkersTool = require("../tools/searchWorkers.tool");
-const workerDetailsTool = require("../tools/workerDetails.tool");
-const availabilityTool = require("../tools/availability.tool");
-const getServicesTool = require("../tools/getServices.tool");
-const bookingTool = require("../tools/booking.tool");
-const bookingStatusTool = require("../tools/bookingStatus.tool");
-const getUserBookingsTool = require("../tools/getUserBookings.tool");
-
-const TOOLS_MAP = {
-  searchWorkers: searchWorkersTool,
-  search_workers: searchWorkersTool,
-  getWorkerDetails: workerDetailsTool,
-  get_worker_details: workerDetailsTool,
-  checkWorkerAvailability: availabilityTool,
-  checkAvailability: availabilityTool,
-  getServices: getServicesTool,
-  createBooking: bookingTool,
-  getBookingStatus: bookingStatusTool,
-  getUserBookings: getUserBookingsTool
-};
-
-const TOOLS_DEFS = [
-  searchWorkersTool.definition,
-  workerDetailsTool.definition,
-  availabilityTool.definition,
-  getServicesTool.definition,
-  bookingTool.definition,
-  bookingStatusTool.definition,
-  getUserBookingsTool.definition
-];
-
+/**
+ * POST /api/lexi/chat
+ * Body: { messages: Array<{ role: string, content: string }>, userContext?: Object }
+ */
 async function chatHandler(req, res) {
   const startTime = Date.now();
-  const { messages = [], userId = "guest_user", userContext = {} } = req.body;
 
-  let aiResult = null;
-  let primaryProvider = env.AI_PROVIDER || "openrouter";
+  try {
+    const { messages = [], userContext = {} } = req.body;
 
-  // 1. Try Primary Configured Provider
-  if (primaryProvider === "openrouter" && env.OPENROUTER_API_KEY) {
-    try {
-      aiResult = await callOpenRouterAI(messages, userContext);
-    } catch (e) {
-      console.warn("OpenRouter provider failed, falling back to backup:", e.message);
+    // 1. Payload validation
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid request payload. 'messages' must be a non-empty array of objects.",
+      });
     }
-  } else if (primaryProvider === "gemini" && env.GEMINI_API_KEY) {
-    try {
-      aiResult = await callGeminiAI(messages, TOOLS_MAP, TOOLS_DEFS);
-    } catch (e) {
-      console.warn("Gemini provider failed, falling back to backup:", e.message);
-    }
-  } else if (primaryProvider === "groq" && env.GROQ_API_KEY) {
-    try {
-      aiResult = await callGroqAI(messages, TOOLS_MAP, TOOLS_DEFS);
-    } catch (e) {
-      console.warn("Groq provider failed, falling back to backup:", e.message);
-    }
-  }
 
-  // 2. Cascade Fallback Providers if Primary not available or failed
-  if (!aiResult && env.OPENROUTER_API_KEY) {
-    try {
-      aiResult = await callOpenRouterAI(messages, userContext);
-    } catch (e) {}
-  }
+    // 2. Timeout protection (15 seconds)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request timed out. Please try again.")), 15000)
+    );
 
-  if (!aiResult && env.GEMINI_API_KEY) {
-    try {
-      aiResult = await callGeminiAI(messages, TOOLS_MAP, TOOLS_DEFS);
-    } catch (e) {}
-  }
+    // 3. Dispatch to AI orchestrator with timeout race
+    const result = await Promise.race([
+      generateLexiResponse(messages, { userContext }),
+      timeoutPromise,
+    ]);
 
-  if (!aiResult && env.GROQ_API_KEY) {
-    try {
-      aiResult = await callGroqAI(messages, TOOLS_MAP, TOOLS_DEFS);
-    } catch (e) {}
-  }
+    const latencyMs = Date.now() - startTime;
 
-  // 3. Resilient Built-in Semantic Engine (Offline / Free Development Mode)
-  if (!aiResult) {
-    aiResult = await callOpenRouterAI(messages, userContext); // executes deterministic fallback
-  }
+    // 4. Privacy-safe audit log (masks sensitive context)
+    console.log(
+      `[Lexi API] /chat completed in ${latencyMs}ms | Provider: ${result.provider || "Local"} | Tool: ${
+        result.toolCalled || "none"
+      }`
+    );
 
-  return res.json({
-    success: true,
-    reply: aiResult.reply,
-    intent: aiResult.intent || (aiResult.toolCalled ? "service_request" : "conversation"),
-    toolCalled: aiResult.toolCalled || null,
-    toolArgs: aiResult.toolArgs || null,
-    toolResult: aiResult.toolResult || null,
-    provider: aiResult.provider || "Skill-Link Intelligence",
-    latencyMs: Date.now() - startTime
-  });
+    return res.status(result.success ? 200 : 200).json({
+      ...result,
+      latencyMs,
+    });
+  } catch (error) {
+    const latencyMs = Date.now() - startTime;
+    console.error(`[Lexi API Error] (${latencyMs}ms):`, error.message);
+
+    // Production safe error message (no leaked stack traces)
+    return res.status(200).json({
+      success: false,
+      reply: "I am having trouble processing your request right now. Please try again in a moment.",
+      provider: "Skill-Link Error Boundary",
+      isError: true,
+      error: error.message || "Failed to process request.",
+      latencyMs,
+    });
+  }
+}
+
+/**
+ * POST /api/lexi/clear
+ * Body: { userId?: string, sessionId?: string }
+ */
+async function clearHandler(req, res) {
+  try {
+    const sessionId = req.body.userId || req.body.sessionId || "default_session";
+    resetConversationMemory(sessionId);
+    console.log(`[Lexi API] /clear executed for session '${sessionId}'`);
+    return res.status(200).json({
+      success: true,
+      message: `Memory and context cleared for session '${sessionId}'.`,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: "Failed to reset session memory.",
+    });
+  }
 }
 
 module.exports = {
   chatHandler,
-  TOOLS_MAP,
-  TOOLS_DEFS
+  clearHandler,
 };

@@ -3,162 +3,195 @@
 import React from "react";
 import { WorkerProfile } from "../lib/seedData";
 import { speakFemaleHindiText } from "../lib/voice";
-import { Star, ShieldCheck, MapPin, Briefcase, Volume2, Sparkles, PhoneCall, CheckCircle2 } from "lucide-react";
+import { Star, ShieldCheck, MapPin, CheckCircle2, Award, Volume2, Clock, Eye, Sparkles, Building } from "lucide-react";
 
 interface WorkerCardProps {
   worker: WorkerProfile;
+  aiMatchScore?: number;
+  aiMatchReason?: string;
   onOpenTrustModal: (worker: WorkerProfile) => void;
   onBookService: (worker: WorkerProfile) => void;
 }
 
-export default function WorkerCard({ worker, onOpenTrustModal, onBookService }: WorkerCardProps) {
-  const getBadgeStyle = (badge: WorkerProfile["badge"]) => {
-    switch (badge) {
-      case "Legendary":
-        return "bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 border-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.5)] font-black";
-      case "Top Rated":
-        return "bg-gradient-to-r from-indigo-600 via-purple-500 to-indigo-500 text-white border-indigo-300 font-extrabold shadow-[0_0_20px_rgba(79,70,229,0.5)]";
-      case "Expert":
-        return "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 text-slate-950 border-emerald-300 font-extrabold shadow-[0_0_20px_rgba(16,185,129,0.5)]";
-      default:
-        return "bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 border-cyan-300 font-extrabold shadow-sm";
-    }
-  };
-
-  const playVoiceSnippet = () => {
+export default function WorkerCard({
+  worker,
+  aiMatchScore,
+  aiMatchReason,
+  onOpenTrustModal,
+  onBookService,
+}: WorkerCardProps) {
+  const playVoiceSnippet = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (worker.audioSnippetUrl) {
       const audio = new Audio(worker.audioSnippetUrl);
       audio.play();
     } else {
-      const text = `Namaste! Main ${worker.name} hoon, ${worker.occupation}. Mujhey ${worker.experience} ka experience hai. Sahayak Female Voice AI Verified Profile.`;
+      const text = `Namaste! Main ${worker.name} hoon, ${worker.occupation}. Main ${worker.cooperativeSociety?.split(" ")[0] || "Cooperative Society"} se certified hoon. Mujhey ${worker.experience} ka experience hai.`;
       speakFemaleHindiText(text);
     }
   };
 
   const avatar = worker.avatarUrl || worker.avatar || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=150&auto=format&fit=crop&q=80";
 
-  return (
-    <div className="glass-panel-3d glass-card-hover p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden group border border-white/15 shadow-2xl rounded-3xl">
-      {/* Background glow */}
-      <div className="absolute -top-12 -right-12 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500 pointer-events-none" />
+  // Cooperative Verification Badge
+  const coopBadgeLabel = worker.cooperativeMemberId
+    ? `Coop Member: ${worker.cooperativeMemberId}`
+    : "Cooperative Certified";
 
+  const effectiveScore = aiMatchScore ?? worker.aiMatchScore ?? Math.min(99, Math.round(worker.trustScore * 0.95 + worker.rating * 1.5));
+  const effectiveReason = aiMatchReason ?? worker.aiMatchReason ?? `Verified ${worker.occupation} with ${worker.experience} exp, registered under ${worker.cooperativeSociety?.split(" ")[0] || "Cooperative"}.`;
+
+  return (
+    <div className="bg-white border border-slate-200 hover:border-blue-400 rounded-2xl p-5 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md group relative">
       <div>
-        {/* Top Badge & Voice Preview */}
-        <div className="flex items-center justify-between gap-2 mb-4">
-          <span
-            className={`px-3 py-1 text-[11px] rounded-full border flex items-center gap-1 uppercase tracking-wider ${getBadgeStyle(
-              worker.badge
-            )}`}
-          >
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            {worker.badge}
-          </span>
+        {/* Top Header Row: Cooperative Affiliation & Audio Intro */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{coopBadgeLabel}</span>
+            </span>
+
+            {effectiveScore >= 85 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
+                <Sparkles className="w-3 h-3 text-purple-600" />
+                <span>{effectiveScore}% AI Match</span>
+              </span>
+            )}
+
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Cooperative Fair Opportunity Work Rotation">
+              <span>⚖️ Fair Rotation</span>
+            </span>
+          </div>
 
           <button
             onClick={playVoiceSnippet}
-            title="Listen to Worker Sahayak Female AI Voice Intro"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 rounded-full border border-indigo-500/40 shadow-sm transition-all active:scale-95 min-h-[36px]"
+            title="Listen to audio introduction"
+            className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors shrink-0"
           >
-            <Volume2 className="w-3.5 h-3.5 text-cyan-300 animate-pulse" />
-            Voice Intro
+            <Volume2 className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Audio</span>
           </button>
         </div>
 
-        {/* Worker Info Row */}
-        <div className="flex items-start gap-4">
+        {/* Worker Profile Info Row */}
+        <div className="flex items-start gap-3.5">
           <div className="relative shrink-0">
             <img
               src={avatar}
               alt={worker.name}
-              className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-400/40 shadow-xl group-hover:scale-105 transition-transform"
+              className="w-14 h-14 rounded-xl object-cover border border-slate-200 shadow-sm"
             />
             <span
-              className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-400 border-2 border-slate-950 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]"
-              title="Available Now"
+              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                worker.isAvailable ? "bg-emerald-500" : "bg-slate-400"
+              }`}
+              title={worker.isAvailable ? "Available now" : "Offline"}
             />
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className="text-base sm:text-lg font-black text-white truncate flex items-center gap-1.5">
-              {worker.name}
-              <span title="Verified SkillLink Pro">
-                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-400 fill-emerald-400/20 shrink-0" />
-              </span>
-            </h3>
-            <p className="text-xs font-black text-emerald-400 uppercase tracking-wide flex items-center gap-1 truncate">
-              <Briefcase className="w-3.5 h-3.5 shrink-0" />
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-base font-bold text-slate-900 truncate">
+                {worker.name}
+              </h3>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            </div>
+
+            <p className="text-xs font-semibold text-blue-600 mt-0.5 truncate">
               {worker.occupation} • {worker.experience}
             </p>
-            <p className="text-xs text-slate-400 truncate flex items-center gap-1 mt-1 font-medium">
-              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              {worker.location}
+
+            <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-1 font-normal">
+              <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+              {worker.location} • <span className="font-semibold text-slate-700">~1.8 km away</span>
             </p>
           </div>
         </div>
 
-        {/* Rating & Jobs Row */}
-        <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1.5 font-black text-amber-300 bg-amber-950/60 px-3 py-1 rounded-xl border border-amber-500/30">
-            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-            <span>{worker.rating.toFixed(1)}</span>
-            <span className="text-slate-400 font-normal">/ 5.0</span>
+        {/* Trade Skills Chips */}
+        {worker.skills && worker.skills.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-3">
+            {worker.skills.slice(0, 3).map((skill, idx) => (
+              <span
+                key={idx}
+                className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/80"
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Metric Strip: Rating, Jobs Done, Response */}
+        <div className="mt-3.5 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
+            <div className="flex items-center justify-center gap-0.5 text-amber-700 font-bold text-xs">
+              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+              <span>{worker.rating.toFixed(1)}</span>
+            </div>
+            <span className="text-[10px] text-slate-500">Rating</span>
           </div>
 
-          <div className="font-bold text-slate-300 bg-slate-950/60 px-3 py-1 rounded-xl border border-white/10">
-            <span className="font-black text-white">{worker.jobsCompleted}</span> Jobs Done
+          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
+            <div className="font-bold text-slate-900 text-xs">{worker.jobsCompleted}</div>
+            <span className="text-[10px] text-slate-500">Jobs Done</span>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-100">
+            <div className="font-bold text-emerald-700 text-xs flex items-center justify-center gap-0.5">
+              <Clock className="w-2.5 h-2.5" /> ~5 min
+            </div>
+            <span className="text-[10px] text-slate-500">Response</span>
           </div>
         </div>
 
-        {/* Interactive Trust Meter */}
+        {/* AI Recommendation Explanation Reason */}
         <div
           onClick={() => onOpenTrustModal(worker)}
-          className="mt-3 p-3 rounded-2xl bg-slate-950/60 border border-white/10 cursor-pointer hover:border-cyan-500/40 transition-colors group/trust"
-          title="Click to view full Trust Score breakdown"
+          className="mt-3 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-100 cursor-pointer transition-colors space-y-1.5"
+          title="Click to view verified Trust breakdown"
         >
-          <div className="flex items-center justify-between text-xs font-black mb-1.5">
-            <span className="text-slate-300 flex items-center gap-1 group-hover/trust:text-cyan-400 transition-colors">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              Trust Score:
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-700 font-bold flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              Cooperative Trust Score
             </span>
-            <span className="text-cyan-300 font-black">{worker.trustScore}%</span>
+            <span className="font-extrabold text-slate-900">{worker.trustScore}%</span>
           </div>
-          <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/10">
+          <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
             <div
-              className="bg-gradient-to-r from-indigo-500 via-emerald-400 to-cyan-300 h-full rounded-full transition-all duration-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+              className="bg-emerald-500 h-full rounded-full transition-all duration-300"
               style={{ width: `${worker.trustScore}%` }}
             />
           </div>
+          <p className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200/80 font-medium leading-relaxed">
+            <span className="font-bold text-purple-700">AI Match:</span> {effectiveReason}
+          </p>
         </div>
-
-        <p className="text-xs text-slate-300 mt-3 line-clamp-2 italic font-medium">
-          &ldquo;{worker.bio || `Professional ${worker.occupation} serving ${worker.location}. Verified SkillLink Profile.`}&rdquo;
-        </p>
       </div>
 
-      {/* Primary Action Buttons */}
-      <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
-        <div className="text-left shrink-0">
-          <span className="text-[10px] uppercase font-black text-slate-400 block">Rate</span>
-          <span className="text-sm sm:text-base font-black text-white flex items-center">
-            ₹{worker.hourlyRate || 399}
-            <span className="text-[10px] text-slate-400 font-normal">/hr</span>
-          </span>
+      {/* Action Footer: Visiting Fee + 3% Welfare Cess breakdown + Buttons */}
+      <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2.5">
+        <div>
+          <div className="text-[10px] uppercase font-bold text-slate-400">Fixed Visit</div>
+          <div className="text-base font-extrabold text-slate-900">₹{worker.visitingFee || 149}</div>
+          <div className="text-[9px] text-emerald-700 font-semibold">+3% Welfare Pool</div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <a
-            href={`tel:${worker.phone}`}
-            className="p-2.5 rounded-xl bg-slate-900 border border-white/10 text-emerald-400 hover:bg-emerald-950 hover:border-emerald-500/50 flex items-center justify-center transition-all min-h-[44px] min-w-[44px]"
-            title={`Call ${worker.name} directly (${worker.phone})`}
+        <div className="flex items-center gap-2 flex-1 justify-end">
+          <button
+            onClick={() => onOpenTrustModal(worker)}
+            className="py-2 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all flex items-center gap-1"
           >
-            <PhoneCall className="w-4 h-4" />
-          </a>
-
+            <Eye className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Profile</span>
+          </button>
           <button
             onClick={() => onBookService(worker)}
-            className="px-4 py-2.5 btn-3d-emerald-shine text-xs font-black tracking-wide shine-overlay min-h-[44px]"
+            className="py-2 px-4 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm text-center"
           >
-            Book Service (₹149 Visit)
+            Book Now
           </button>
         </div>
       </div>

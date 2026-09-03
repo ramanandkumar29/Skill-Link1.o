@@ -3,7 +3,23 @@
 import React, { useState } from "react";
 import { Worker } from "../lib/seedData";
 import { saveBooking, updateBookingPhoto } from "../lib/storage";
-import { CheckCircle2, QrCode, Upload, ShieldCheck, IndianRupee, Sparkles, ArrowRight, Camera, X } from "lucide-react";
+import { createBookingInDb, updateBookingStatusInDb } from "../lib/supabaseService";
+import { getStoredAuthSession } from "../lib/auth";
+import {
+  CheckCircle2,
+  QrCode,
+  ShieldCheck,
+  IndianRupee,
+  ArrowRight,
+  Camera,
+  X,
+  Calendar,
+  Clock,
+  Download,
+  Star,
+  Building,
+  HeartHandshake
+} from "lucide-react";
 
 interface PaymentModalProps {
   worker: Worker | null;
@@ -12,22 +28,59 @@ interface PaymentModalProps {
 }
 
 export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModalProps) {
-  const [step, setStep] = useState<"VISIT_FEE" | "CONFIRMED" | "POST_SERVICE">("VISIT_FEE");
+  const [step, setStep] = useState<"SCHEDULE" | "PAYMENT" | "CONFIRMED" | "FEEDBACK">("SCHEDULE");
   const [paymentMethod, setPaymentMethod] = useState<"UPI" | "CASH">("UPI");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [clientAddress, setClientAddress] = useState("");
+  const [preferredDate, setPreferredDate] = useState("Today (ASAP)");
+  const [preferredSlot, setPreferredSlot] = useState("Within 45 Mins");
+  const [customNotes, setCustomNotes] = useState("");
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [finalBill, setFinalBill] = useState<number>(499);
+
+  // Post-service rating & invoice
+  const [rating, setRating] = useState(5);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   if (!worker) return null;
 
-  const handlePayVisitFee = (e: React.FormEvent) => {
+  const visitFee = worker.visitingFee || 149;
+  const welfareCess = Number((visitFee * 0.03).toFixed(1)); // 3% Cooperative Welfare Pool
+  const totalPayable = Math.round(visitFee + welfareCess);
+
+  const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientName || !clientPhone) {
-      alert("Please provide your name and contact phone number.");
+    if (!clientName.trim() || !clientPhone.trim()) {
+      alert("Please enter your name and phone number.");
       return;
     }
+    setStep("PAYMENT");
+  };
+
+  const handleConfirmBookingPayment = () => {
+    const session = getStoredAuthSession();
+    const customerId = session?.id || `anon-${Date.now()}`;
+
+    // Persist real booking to Supabase `bookings` table
+    createBookingInDb({
+      customerId,
+      workerId: worker.id,
+      serviceName: worker.occupation || "Home Service",
+      customerName: clientName,
+      customerPhone: clientPhone,
+      customerAddress: clientAddress,
+      problemDescription: customNotes,
+      scheduledDate: preferredDate,
+      scheduledTime: preferredSlot,
+      visitingFee: totalPayable,
+      isFeePaid: true,
+      notes: customNotes,
+    }).then((res) => {
+      if (res.data?.id) {
+        setActiveBookingId(res.data.id);
+      }
+    }).catch((e) => console.warn("Supabase booking creation notice:", e));
 
     const newBooking = saveBooking({
       workerId: worker.id,
@@ -35,92 +88,104 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
       occupation: worker.occupation,
       clientName,
       clientPhone,
-      serviceType: `${worker.occupation} Home Inspection`,
-      bookingDate: new Date().toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      serviceType: `${worker.occupation} - ${preferredSlot}`,
+      bookingDate: `${preferredDate}, ${preferredSlot}`,
       status: "Confirmed",
       visitFeePaid: true,
-      visitFeeAmount: 149,
+      visitFeeAmount: totalPayable,
     });
 
     setActiveBookingId(newBooking.id);
     setStep("CONFIRMED");
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  const handleDownloadInvoice = () => {
+    const invoiceContent = `
+=====================================================
+SKILL-LINK COOPERATIVE SERVICES PLATFORM
+Ministry of Cooperation Certified Gig Ecosystem
+Invoice Reference: INV-${activeBookingId || "9941"}
+Date: ${new Date().toLocaleString("en-IN")}
+=====================================================
+Cooperative Society: ${worker.cooperativeSociety || "Tricity Labour & Household Services Cooperative Society Ltd."}
+Society Reg No: ${worker.cooperativeMemberId || "TLCS-2022-041"}
 
-  const handleCompleteService = () => {
-    if (activeBookingId) {
-      updateBookingPhoto(activeBookingId, photoPreview || "", finalBill);
-      onSuccess(activeBookingId);
-    }
+Customer Name:    ${clientName || "Customer"}
+Customer Phone:   ${clientPhone || "Phone"}
+Service Address:  ${clientAddress || "Address On File"}
+Assigned Artisan: ${worker.name} (${worker.occupation})
+
+LINE ITEMS:
+1. Doorstep Inspection & Visit Fee:        ₹${visitFee}.00
+2. 3% Cooperative Worker Welfare Cess:     ₹${welfareCess}
+3. Platform Facilitation Commission:       ₹0.00 (Coop 0% Cut)
+-----------------------------------------------------
+TOTAL AMOUNT PAID:                         ₹${totalPayable}.00
+Payment Mode:                              ${paymentMethod} (UPI Verified)
+Tax Status:                                Society Cess Exempt
+=====================================================
+Thank you for supporting Labour Cooperative Societies!
+    `.trim();
+
+    const blob = new Blob([invoiceContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SkillLink_Receipt_${activeBookingId || "INV"}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xl animate-fade-in">
-      <div className="relative w-full max-w-lg glass-panel-3d bg-slate-950 border border-white/20 rounded-3xl p-6 shadow-2xl overflow-hidden">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in text-slate-900">
+      <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
+              <Building className="w-3 h-3" />
+              Cooperative Certified Booking &amp; Escrow
+            </span>
+            <h3 className="text-base font-bold text-slate-900">
+              {step === "SCHEDULE" && "Schedule Service & Slot"}
+              {step === "PAYMENT" && "Digital Payment & Welfare Breakdown"}
+              {step === "CONFIRMED" && "Booking Confirmed & Dispatched"}
+              {step === "FEEDBACK" && "Rate Service & Download Invoice"}
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-        {step === "VISIT_FEE" && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-emerald-400 to-cyan-300 p-0.5 shadow-md flex items-center justify-center text-slate-950 font-black">
-                <IndianRupee className="w-6 h-6 text-slate-950" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-white">Book Inspection Visit</h3>
-                <p className="text-xs text-slate-400 font-medium">
-                  Fixed Pre-Service Inspection Guarantee Fee
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 text-white shadow-xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase tracking-wider text-cyan-300 font-black">
-                    Technician Allocated
+        {/* STEP 1: SCHEDULE & CONTACT DETAILS */}
+        {step === "SCHEDULE" && (
+          <form onSubmit={handleProceedToPayment} className="space-y-4 pt-3">
+            {/* Selected Worker Mini-Card */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+              <img
+                src={worker.avatarUrl || worker.avatar || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=150"}
+                alt={worker.name}
+                className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-sm font-bold text-slate-900">{worker.name}</h4>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Coop Verified
                   </span>
-                  <h4 className="text-lg font-black text-white flex items-center gap-2 mt-0.5">
-                    {worker.name}
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
-                      {worker.occupation}
-                    </span>
-                  </h4>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs text-slate-400 block">Visit Fee</span>
-                  <span className="text-2xl font-black text-emerald-400">₹149</span>
-                </div>
+                <p className="text-xs text-blue-600 font-semibold">{worker.occupation}</p>
+                <p className="text-[11px] text-slate-500 truncate">{worker.cooperativeSociety || worker.location}</p>
               </div>
-              <p className="text-xs text-slate-300 mt-3 pt-3 border-t border-white/10 flex items-center gap-1.5 font-medium">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Fee deducted from final bill upon completion of service.
-              </p>
             </div>
 
-            <form onSubmit={handlePayVisitFee} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-black text-slate-400 uppercase mb-1">
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
                   Your Full Name
                 </label>
                 <input
@@ -128,13 +193,13 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
                   required
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
-                  placeholder="e.g. Priyanshu Sharma"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g. Pooja Sharma"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-black text-slate-400 uppercase mb-1">
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
                   Mobile Number
                 </label>
                 <input
@@ -142,136 +207,288 @@ export default function PaymentModal({ worker, onClose, onSuccess }: PaymentModa
                   required
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="e.g. +91 98765 12345"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g. 9814022910"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-blue-500"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                Service Address &amp; House Number
+              </label>
+              <input
+                type="text"
+                required
+                value={clientAddress}
+                onChange={(e) => setClientAddress(e.target.value)}
+                placeholder="e.g. House 412, Sector 18-B, Chandigarh"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            {/* Date & Time Slot Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                  Preferred Date
+                </label>
+                <select
+                  value={preferredDate}
+                  onChange={(e) => setPreferredDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-blue-500"
+                >
+                  <option value="Today (ASAP)">Today (ASAP Dispatch)</option>
+                  <option value="Tomorrow">Tomorrow</option>
+                  <option value="This Weekend">This Weekend</option>
+                </select>
+              </div>
 
               <div>
-                <label className="block text-xs font-black text-slate-400 uppercase mb-1">
-                  Select Payment Method
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                  Preferred Time Slot
                 </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("UPI")}
-                    className={`py-3 px-4 rounded-2xl border font-black text-xs flex items-center justify-center gap-2 transition-all ${
-                      paymentMethod === "UPI"
-                        ? "bg-indigo-950 border-indigo-500 text-cyan-300 shadow-md ring-2 ring-indigo-500/40"
-                        : "bg-slate-900 border-white/10 text-slate-400"
-                    }`}
-                  >
-                    <QrCode className="w-4 h-4 text-cyan-400" /> Instant UPI / GPay
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("CASH")}
-                    className={`py-3 px-4 rounded-2xl border font-black text-xs flex items-center justify-center gap-2 transition-all ${
-                      paymentMethod === "CASH"
-                        ? "bg-emerald-950 border-emerald-500 text-emerald-300 shadow-md ring-2 ring-emerald-500/40"
-                        : "bg-slate-900 border-white/10 text-slate-400"
-                    }`}
-                  >
-                    <IndianRupee className="w-4 h-4 text-emerald-400" /> Pay Cash on Arrival
-                  </button>
-                </div>
+                <select
+                  value={preferredSlot}
+                  onChange={(e) => setPreferredSlot(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold focus:outline-none focus:border-blue-500"
+                >
+                  <option value="Within 45 Mins">Within 45 Mins (Immediate)</option>
+                  <option value="10:00 AM - 12:00 PM">10:00 AM - 12:00 PM</option>
+                  <option value="02:00 PM - 04:00 PM">02:00 PM - 04:00 PM</option>
+                  <option value="05:00 PM - 07:00 PM">05:00 PM - 07:00 PM</option>
+                </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                Describe Problem or Specific Notes
+              </label>
+              <textarea
+                rows={2}
+                value={customNotes}
+                onChange={(e) => setCustomNotes(e.target.value)}
+                placeholder="e.g. Water leaking under the washbasin pipe..."
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>Continue to Payment (₹{totalPayable})</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+        )}
+
+        {/* STEP 2: PAYMENT & 3% COOPERATIVE WELFARE BREAKDOWN */}
+        {step === "PAYMENT" && (
+          <div className="space-y-4 pt-3">
+            {/* Price Itemized Card */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Standard Doorstep Visit &amp; Inspection</span>
+                <span className="font-bold text-slate-900">₹{visitFee}.00</span>
+              </div>
+              <div className="flex justify-between text-emerald-700">
+                <span className="flex items-center gap-1">
+                  <HeartHandshake className="w-3.5 h-3.5" />
+                  3% Cooperative Worker Welfare Pool
+                </span>
+                <span className="font-bold">+ ₹{welfareCess}</span>
+              </div>
+              <div className="flex justify-between text-slate-500 text-[11px]">
+                <span>Commercial Platform Commission</span>
+                <span className="font-bold text-emerald-600">₹0.00 (Coop 100% Fair Wage)</span>
+              </div>
+              <div className="border-t border-slate-200 pt-2 flex justify-between font-black text-slate-900 text-sm">
+                <span>Total Due Now</span>
+                <span className="text-blue-600">₹{totalPayable}</span>
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">
+                Select Digital Payment Mode
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("UPI")}
+                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    paymentMethod === "UPI"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <QrCode className="w-4 h-4" /> UPI / QR Scan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("CASH")}
+                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                    paymentMethod === "CASH"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <IndianRupee className="w-4 h-4" /> Cash on Visit
+                </button>
+              </div>
+            </div>
+
+            {/* Simulated QR Code for UPI */}
+            {paymentMethod === "UPI" && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2">
+                <div className="w-32 h-32 bg-white border-2 border-slate-300 rounded-xl mx-auto flex items-center justify-center p-2 shadow-inner">
+                  <img
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=upi://pay?pa=coop.skilllink@sbi&pn=SkillLinkCoop&am=153.50&cu=INR"
+                    alt="UPI QR Code"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 font-mono">
+                  Scan via GPay, PhonePe, Paytm or BHIM • ID: <span className="font-bold">coop.skilllink@sbi</span>
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setStep("SCHEDULE")}
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBookingPayment}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+              >
+                Confirm Payment &amp; Dispatch Worker
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: BOOKING CONFIRMED */}
+        {step === "CONFIRMED" && (
+          <div className="space-y-4 pt-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Dispatch Order Created
+              </span>
+              <h4 className="text-lg font-bold text-slate-900 mt-1">Booking Confirmed!</h4>
+              <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
+                <span className="font-semibold text-slate-900">{worker.name}</span> has accepted your request. Arriving in ~{preferredSlot.toLowerCase()}.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Booking ID:</span>
+                <span className="font-mono font-bold text-slate-900">{activeBookingId || "BK-4412"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Scheduled For:</span>
+                <span className="font-semibold text-slate-800">{preferredDate}, {preferredSlot}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Worker Contact:</span>
+                <span className="font-semibold text-slate-800">{worker.phone}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleDownloadInvoice}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Society Invoice</span>
+              </button>
 
               <button
-                type="submit"
-                className="w-full py-3.5 btn-3d-emerald-shine text-xs font-black shine-overlay mt-2"
+                type="button"
+                onClick={() => setStep("FEEDBACK")}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
               >
-                Confirm Booking & Pay ₹149 <ArrowRight className="w-4 h-4" />
+                Rate &amp; Review
               </button>
-            </form>
+            </div>
           </div>
         )}
 
-        {step === "CONFIRMED" && (
-          <div className="text-center py-4 space-y-4">
-            <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(16,185,129,0.5)] border border-emerald-500/40">
-              <CheckCircle2 className="w-10 h-10 animate-bounce text-emerald-400" />
+        {/* STEP 4: RATE & REVIEW (SIH Feature 9) */}
+        {step === "FEEDBACK" && (
+          <div className="space-y-4 pt-3 text-center">
+            <div>
+              <h4 className="text-base font-bold text-slate-900">How was your service experience?</h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Your rating helps {worker.name} maintain top cooperative trust standing.
+              </p>
             </div>
 
-            <h3 className="text-2xl font-black text-white">
-              Booking Confirmed!
-            </h3>
-            <p className="text-xs text-slate-300 max-w-xs mx-auto font-medium">
-              <span className="font-bold text-cyan-300">{worker.name}</span> has been dispatched. Expected arrival in <span className="font-black text-white">25 minutes</span>.
-            </p>
-
-            <button
-              onClick={() => setStep("POST_SERVICE")}
-              className="w-full py-3.5 btn-3d-tactile text-xs font-black mt-4"
-            >
-              Simulate Job Completion & Post Photo <Camera className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {step === "POST_SERVICE" && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold">
-                <Camera className="w-5 h-5 text-cyan-300" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-white">Work Completion Proof</h3>
-                <p className="text-xs text-slate-400">Upload work photo and clear remaining bill</p>
-              </div>
+            {/* Star Rating */}
+            <div className="flex items-center justify-center gap-2 py-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRating(star)}
+                  className="p-1 transition-transform hover:scale-110"
+                >
+                  <Star
+                    className={`w-8 h-8 ${
+                      star <= rating
+                        ? "fill-amber-400 text-amber-400"
+                        : "text-slate-300"
+                    }`}
+                  />
+                </button>
+              ))}
             </div>
 
-            <div className="border-2 border-dashed border-white/20 hover:border-indigo-500 rounded-2xl p-4 text-center cursor-pointer bg-slate-900 relative overflow-hidden">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              />
-              {photoPreview ? (
-                <div className="relative">
-                  <img src={photoPreview} alt="Work Proof" className="w-full h-36 object-cover rounded-xl shadow-md" />
-                  <span className="absolute bottom-2 right-2 bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Photo Attached
-                  </span>
-                </div>
-              ) : (
-                <div className="py-4 flex flex-col items-center gap-1 text-slate-400">
-                  <Upload className="w-8 h-8 text-cyan-400 animate-pulse" />
-                  <span className="text-xs font-black text-white">Click or Drag Work Photo</span>
-                  <span className="text-[10px] text-slate-400">Captures proof before final payment</span>
-                </div>
-              )}
-            </div>
+            <textarea
+              rows={3}
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="Write a quick note on punctuality, quality, and behavior..."
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:bg-white focus:outline-none focus:border-blue-500 text-slate-900"
+            />
 
-            <div className="p-4 rounded-2xl bg-slate-900 text-white flex items-center justify-between border border-white/10">
-              <div className="space-y-1">
-                <span className="text-[10px] text-cyan-300 uppercase font-black tracking-wider">
-                  Final Work Invoice
-                </span>
-                <div className="text-xs text-slate-300">
-                  Total Cost: <span className="font-black text-white">₹{finalBill}</span>
-                </div>
-                <div className="text-xs text-emerald-400 font-bold">
-                  Pre-Paid Fee Deducted: -₹149
-                </div>
-                <div className="text-base font-black text-amber-300">
-                  Net Balance: ₹{finalBill - 149}
-                </div>
+            {feedbackSubmitted ? (
+              <div className="p-3 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200">
+                ✓ Thank you! Feedback recorded in Cooperative Registry.
               </div>
-
-              <div className="w-20 h-20 bg-white p-2 rounded-xl shadow-2xl flex flex-col items-center justify-center border-2 border-emerald-400">
-                <QrCode className="w-14 h-14 text-slate-950" />
-              </div>
-            </div>
-
-            <button
-              onClick={handleCompleteService}
-              className="w-full py-3.5 btn-3d-emerald-shine text-xs font-black shine-overlay"
-            >
-              Finish Job & Save Receipt <Sparkles className="w-4 h-4" />
-            </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setFeedbackSubmitted(true);
+                  if (activeBookingId) {
+                    updateBookingStatusInDb(activeBookingId, "completed", { finalAmount: totalPayable });
+                  }
+                  setTimeout(() => {
+                    if (activeBookingId) onSuccess(activeBookingId);
+                    onClose();
+                  }, 1200);
+                }}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+              >
+                Submit Feedback &amp; Finish
+              </button>
+            )}
           </div>
         )}
       </div>

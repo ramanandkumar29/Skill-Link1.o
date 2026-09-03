@@ -1,150 +1,288 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Zap, Globe, Signal } from "lucide-react";
+import {
+  Wrench,
+  MapPin,
+  User,
+  LogOut,
+  ChevronDown,
+  Globe,
+  ShieldCheck,
+  Building,
+  Briefcase,
+  Users,
+  Sparkles,
+  Zap
+} from "lucide-react";
+import { AuthSessionUser } from "@/lib/auth";
+import { LanguageCode, LANGUAGES, TRANSLATIONS } from "@/lib/i18n";
+
+export type AppSection =
+  | "MARKETPLACE"
+  | "WORKER_PORTAL"
+  | "COOPERATIVE_ADMIN"
+  | "QUICKFIX"
+  | "SAHAYAK"
+  | "HELPLINES"
+  | "PROFILE";
 
 interface HeaderProps {
-  activeSection?: "MARKETPLACE" | "SAHAYAK" | "HELPLINES" | "QUICKFIX" | "PROFILE";
-  onSelectSection?: (section: "MARKETPLACE" | "SAHAYAK" | "HELPLINES" | "QUICKFIX" | "PROFILE") => void;
+  activeSection?: AppSection;
+  onSelectSection?: (section: AppSection) => void;
+  currentUser?: AuthSessionUser | null;
+  onLogout?: () => void;
+  currentLanguage?: LanguageCode;
+  onSelectLanguage?: (lang: LanguageCode) => void;
+  onLanguageToggle?: () => void;
+  currentLang?: "en" | "hi";
+  onOpenWelfareModal?: () => void;
 }
 
-export default function Header({ activeSection = "MARKETPLACE", onSelectSection }: HeaderProps) {
-  const [lang, setLang] = useState<"Hindi" | "Hinglish" | "English">("Hinglish");
-  const [isOnline, setIsOnline] = useState(true);
+export default function Header({
+  activeSection = "MARKETPLACE",
+  onSelectSection,
+  currentUser,
+  onLogout,
+  currentLanguage = "en",
+  onSelectLanguage,
+  onLanguageToggle,
+  currentLang,
+  onOpenWelfareModal,
+}: HeaderProps) {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const langRef = useRef<HTMLDivElement>(null);
+
+  const activeLang: LanguageCode = currentLanguage || (currentLang as LanguageCode) || "en";
+  const t = TRANSLATIONS[activeLang] || TRANSLATIONS.en;
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+      if (langRef.current && !langRef.current.contains(event.target as Node)) {
+        setIsLangDropdownOpen(false);
+      }
     };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleNavClick = (section: "MARKETPLACE" | "SAHAYAK" | "HELPLINES" | "QUICKFIX" | "PROFILE") => {
+  const handleNavClick = (section: AppSection) => {
     if (onSelectSection) {
       onSelectSection(section);
     }
   };
 
+  const displayName = currentUser?.name
+    ? currentUser.name.split("@")[0].replace(/[0-9_]/g, "").trim() || currentUser.name.split("@")[0]
+    : "Coop Account";
+
   return (
-    <header className="sticky top-0 z-40 w-full backdrop-blur-2xl bg-slate-950/85 border-b border-white/10 text-white px-4 sm:px-6 lg:px-8 py-3 shadow-2xl">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        {/* App Logo */}
-        <div
-          onClick={() => handleNavClick("MARKETPLACE")}
-          className="cursor-pointer"
-        >
-          <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-            <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-emerald-400 to-cyan-300 p-0.5 shadow-[0_0_20px_rgba(79,70,229,0.5)] transition-transform group-hover:scale-105">
-              <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-                <Zap className="w-5 h-5 text-cyan-300 fill-cyan-300 animate-pulse" />
-              </div>
+    <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/95 border-b border-slate-200 text-slate-900 px-3 sm:px-6 py-2.5 transition-all shadow-sm">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
+        {/* Brand Logo & Ministry Affiliation */}
+        <div onClick={() => handleNavClick("MARKETPLACE")} className="cursor-pointer">
+          <div className="flex items-center gap-2 group shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shadow-blue-600/20 group-hover:bg-blue-700 transition-colors">
+              <Building className="w-5 h-5 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-cyan-300 bg-clip-text text-transparent flex items-center gap-1.5">
-                SkillLink
-                <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  Sahayak AI
+              <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center gap-1.5">
+                Skill-Link
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Cooperative
                 </span>
               </span>
-              <span className="text-[10px] text-slate-400 font-extrabold hidden sm:inline">
-                Service Marketplace
+              <span className="hidden sm:block text-[10px] font-semibold text-slate-500 truncate max-w-[210px]">
+                Ministry of Cooperation • SIH26089
               </span>
             </div>
-          </Link>
+          </div>
         </div>
 
-        {/* Desktop Quick Nav Links (hidden on mobile, visible on desktop) */}
-        <nav className="hidden md:flex items-center gap-6 text-xs font-black text-slate-300">
+        {/* 3-in-1 Role Switcher (Customer / Worker / Admin) */}
+        <nav className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 text-xs font-bold text-slate-700">
           <button
             onClick={() => handleNavClick("MARKETPLACE")}
-            className={`hover:text-cyan-300 transition-colors ${
-              activeSection === "MARKETPLACE" ? "text-cyan-300 border-b-2 border-cyan-400 pb-0.5" : ""
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeSection === "MARKETPLACE"
+                ? "bg-white text-blue-700 font-black shadow-sm"
+                : "hover:text-slate-900 hover:bg-white/60"
             }`}
           >
-            Marketplace
+            <User className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">{t.roleCustomer}</span>
+            <span className="md:hidden">Customer</span>
           </button>
+
           <button
-            onClick={() => handleNavClick("HELPLINES")}
-            className={`hover:text-cyan-300 transition-colors ${
-              activeSection === "HELPLINES" ? "text-cyan-300 border-b-2 border-cyan-400 pb-0.5" : ""
+            onClick={() => handleNavClick("WORKER_PORTAL")}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeSection === "WORKER_PORTAL"
+                ? "bg-white text-emerald-700 font-black shadow-sm"
+                : "hover:text-slate-900 hover:bg-white/60"
             }`}
           >
-            Brand Helplines
+            <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden md:inline">{t.roleWorker}</span>
+            <span className="md:hidden">Worker</span>
           </button>
+
+          <button
+            onClick={() => handleNavClick("COOPERATIVE_ADMIN")}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeSection === "COOPERATIVE_ADMIN"
+                ? "bg-white text-purple-700 font-black shadow-sm"
+                : "hover:text-slate-900 hover:bg-white/60"
+            }`}
+          >
+            <Building className="w-3.5 h-3.5 text-purple-600" />
+            <span className="hidden md:inline">{t.roleAdmin}</span>
+            <span className="md:hidden">Admin</span>
+          </button>
+
           <button
             onClick={() => handleNavClick("QUICKFIX")}
-            className={`hover:text-rose-400 transition-colors flex items-center gap-1 ${
-              activeSection === "QUICKFIX" ? "text-rose-400 border-b-2 border-rose-500 pb-0.5" : ""
+            className={`hidden lg:flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-rose-700 hover:bg-rose-50/80 transition-all ${
+              activeSection === "QUICKFIX" ? "bg-rose-50 font-black border border-rose-200" : ""
             }`}
           >
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-            QuickFix SOS
-          </button>
-          <button
-            onClick={() => handleNavClick("PROFILE")}
-            className={`hover:text-cyan-300 transition-colors ${
-              activeSection === "PROFILE" ? "text-cyan-300 border-b-2 border-cyan-400 pb-0.5" : ""
-            }`}
-          >
-            Dashboard
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+            <span>Emergency SOS</span>
           </button>
         </nav>
 
-        {/* Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Mobile SOS Shortcut */}
-          <button
-            onClick={() => handleNavClick("QUICKFIX")}
-            className="md:hidden flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-rose-300 bg-rose-950/80 border border-rose-500/40 rounded-xl shadow-lg active:scale-95 min-h-[38px]"
-          >
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-            SOS
-          </button>
+        {/* Right Controls: Multilingual Selector & Profile */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
+          {/* Multilingual 5-Language Dropdown */}
+          <div className="relative" ref={langRef}>
+            <button
+              onClick={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-xl transition-all shadow-sm"
+              title="Select Language"
+            >
+              <Globe className="w-3.5 h-3.5 text-blue-600" />
+              <span className="uppercase text-[11px]">{activeLang}</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
 
-          {/* Network Status Indicator */}
-          <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full font-extrabold border ${
-              isOnline
-                ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/40"
-                : "bg-amber-950/80 text-amber-300 border-amber-500/40"
-            }`}
-            title={isOnline ? "Network Status: High Speed Connected" : "Network Status: Offline or Low Bandwidth"}
-          >
-            {isOnline ? (
-              <>
-                <Globe className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                <span className="hidden sm:inline">🌐 Online</span>
-              </>
-            ) : (
-              <>
-                <Signal className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">📶 Low Net</span>
-              </>
+            {isLangDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-xs text-slate-700 animate-in fade-in slide-in-from-top-1">
+                <div className="px-3 py-1.5 border-b border-slate-100 text-[10px] font-bold uppercase text-slate-400">
+                  Select Language (भाषा)
+                </div>
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => {
+                      if (onSelectLanguage) onSelectLanguage(lang.code);
+                      else if (onLanguageToggle) onLanguageToggle();
+                      setIsLangDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center justify-between font-semibold ${
+                      activeLang === lang.code ? "text-blue-700 bg-blue-50/50 font-bold" : ""
+                    }`}
+                  >
+                    <span>{lang.label}</span>
+                    <span className="text-sm">{lang.flag}</span>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* Language Switcher */}
-          <div className="flex items-center bg-slate-900 border border-white/10 rounded-xl p-0.5 shadow-inner">
-            {(["Hindi", "Hinglish", "English"] as const).map((l) => (
-              <button
-                key={l}
-                onClick={() => setLang(l)}
-                className={`px-2.5 py-1 text-[11px] font-black rounded-lg transition-all ${
-                  lang === l
-                    ? "bg-gradient-to-r from-indigo-600 to-emerald-500 text-white shadow-md"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
+          {/* Welfare Info Trigger */}
+          {onOpenWelfareModal && (
+            <button
+              onClick={onOpenWelfareModal}
+              className="hidden xl:inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-all"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>3% Welfare Info</span>
+            </button>
+          )}
+
+          {/* User Account Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all shadow-sm"
+            >
+              <User className="w-3.5 h-3.5 text-blue-600" />
+              <span className="max-w-[75px] sm:max-w-[100px] truncate">{displayName}</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {isDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-xl shadow-lg py-1.5 z-50 text-xs text-slate-700 animate-in fade-in slide-in-from-top-1">
+                <div className="px-3.5 py-2 border-b border-slate-100">
+                  <p className="font-bold text-slate-900 truncate">{displayName}</p>
+                  <p className="text-[10px] text-slate-500 capitalize">
+                    {currentUser?.role || "Cooperative Customer"}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    handleNavClick("PROFILE");
+                    setIsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2 font-medium"
+                >
+                  <User className="w-3.5 h-3.5 text-blue-600" />
+                  My Bookings &amp; History
+                </button>
+
+                <button
+                  onClick={() => {
+                    handleNavClick("WORKER_PORTAL");
+                    setIsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2 font-medium"
+                >
+                  <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
+                  Worker Portal Dashboard
+                </button>
+
+                <button
+                  onClick={() => {
+                    handleNavClick("COOPERATIVE_ADMIN");
+                    setIsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2 font-medium"
+                >
+                  <Building className="w-3.5 h-3.5 text-purple-600" />
+                  Cooperative Federation Admin
+                </button>
+
+                <Link
+                  href="/login"
+                  onClick={() => setIsDropdownOpen(false)}
+                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-700 flex items-center gap-2 font-semibold border-t border-slate-100"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  Sign In / Switch Account
+                </Link>
+
+                {onLogout && (
+                  <button
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      onLogout();
+                    }}
+                    className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2 font-medium"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Log Out
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

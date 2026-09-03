@@ -1,12 +1,11 @@
 /**
  * Skill-Link Database Seeder Script
- * Upserts services, worker test profiles, and knowledge chunks into MongoDB & Vector Store safely without overwriting production data.
+ * Upserts services and worker test profiles into MongoDB safely without overwriting production data.
  */
 
 const mongoose = require("mongoose");
 const env = require("../config/env");
 const { connectDB } = require("../config/db");
-const { ingestAll } = require("../rag/ingest");
 
 // Seed Data
 const { SEEDED_SERVICES } = require("../seed/services.seed");
@@ -48,10 +47,6 @@ async function seedDatabase() {
   } else {
     console.log("ℹ️ MongoDB running in local in-memory store mode. Seed data ready in memory.");
   }
-
-  // 4. Ingest All RAG Markdown Knowledge Documents into Vector Store
-  console.log("📚 Ingesting Markdown Knowledge Base into Vector Store...");
-  ingestAll();
 
   console.log("🎉 Seeding completed successfully!");
 }

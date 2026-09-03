@@ -5,6 +5,27 @@
 
 const SEEDED_DEV_WORKERS = [
   {
+    workerId: "w_ramanand_kumar",
+    name: "Ramanand Kumar",
+    occupation: "Master House Painter & Wall Texture Specialist",
+    category: "painter",
+    phone: "6203637790",
+    rating: 4.9,
+    reviewsCount: 142,
+    jobsCompleted: 165,
+    trustScore: 99,
+    experience: "4 years",
+    location: "Sector 17, Chandigarh",
+    visitingFee: 149,
+    hourlyRate: 349,
+    avatarUrl: "/workers/ramanand-kumar.png",
+    isOnline: true,
+    isVerified: true,
+    skills: ["Interior Emulsion Painting", "Exterior Weathercoat", "Wall Putty & Primer", "Artistic Texture Designing", "Waterproofing & Seepage Fix"],
+    emergencySupported: true,
+    isDemoData: true
+  },
+  {
     workerId: "w_bike_1",
     name: "Raj Kumar",
     occupation: "Senior Bike & Scooter Mechanic",

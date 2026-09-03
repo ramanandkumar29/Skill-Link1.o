@@ -10,15 +10,18 @@ const bookingSchema = new mongoose.Schema(
     clientPhone: { type: String, required: true },
     serviceType: { type: String, required: true },
     location: { type: String, required: true },
+    bookingDate: { type: String, default: () => new Date().toLocaleDateString() },
+    bookingTime: { type: String, default: "10:00 AM" },
     status: {
       type: String,
       enum: ["Pending", "Confirmed", "In-Progress", "Completed", "Cancelled"],
-      default: "Confirmed"
+      default: "Confirmed",
     },
     visitFeeAmount: { type: Number, default: 149 },
     visitFeePaid: { type: Boolean, default: true },
     emergencySos: { type: Boolean, default: false },
-    paymentMethod: { type: String, default: "UPI" }
+    paymentMethod: { type: String, default: "UPI" },
+    otpSecret: { type: String, default: () => Math.floor(100000 + Math.random() * 900000).toString() },
   },
   { timestamps: true }
 );
