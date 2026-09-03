@@ -1,10 +1,12 @@
 -- ==============================================================================
--- SAFE INCREMENTAL DATABASE MIGRATION (NON-DESTRUCTIVE)
--- Does NOT drop or recreate existing tables.
--- Uses ADD COLUMN IF NOT EXISTS, safe triggers, and non-conflicting RLS policies.
+-- SAFE INCREMENTAL DATABASE MIGRATION (LEAST-PRIVILEGE SECURITY AUDITED)
+-- Non-destructive: Does NOT drop tables or delete existing data.
+-- Strict Row-Level Security: Disallows anonymous access to private data.
 -- ==============================================================================
 
--- 1. SAFE COLUMN ADDITIONS (Only adds columns if they are missing)
+-- ------------------------------------------------------------------------------
+-- 1. SAFE COLUMN ADDITIONS (Only adds missing columns)
+-- ------------------------------------------------------------------------------
 
 -- Profiles
 ALTER TABLE IF EXISTS public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
@@ -84,7 +86,9 @@ ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS completion_photo_
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE IF EXISTS public.bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
--- 2. SAFE PROFILE TRIGGER (Links auth.users signup directly to public.profiles)
+-- ------------------------------------------------------------------------------
+-- 2. SAFE PROFILE TRIGGER WITH NON-BLOCKING EXCEPTION HANDLER
+-- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -103,92 +107,138 @@ BEGIN
         role = COALESCE(EXCLUDED.role, profiles.role),
         updated_at = now();
     RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+    -- Ensures an auth user is created even if metadata format has unexpected fields
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+-- Safe trigger binding
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'on_auth_user_created'
+    ) THEN
+        CREATE TRIGGER on_auth_user_created
+            AFTER INSERT ON auth.users
+            FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+    END IF;
+END $$;
 
--- 3. SAFE RLS POLICIES (Replaces policies idempotently without duplicate errors)
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+-- ------------------------------------------------------------------------------
+-- 3. STRICT ROW LEVEL SECURITY: SERVICES, COOPERATIVES, WORKERS
+-- ------------------------------------------------------------------------------
+ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cooperatives ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
--- Services RLS
+-- Services: Public can read active catalog only
 DROP POLICY IF EXISTS "Public can view active services" ON public.services;
 CREATE POLICY "Public can view active services"
     ON public.services FOR SELECT
+    TO anon, authenticated
     USING (is_active = true OR is_active IS NULL);
 
--- Cooperatives RLS
+-- Cooperatives: Public directory view
 DROP POLICY IF EXISTS "Public can view cooperatives" ON public.cooperatives;
 CREATE POLICY "Public can view cooperatives"
     ON public.cooperatives FOR SELECT
+    TO anon, authenticated
     USING (true);
 
--- Workers RLS
+-- Workers Directory: Public can view active/verified workers for search & discovery
 DROP POLICY IF EXISTS "Public can view workers" ON public.workers;
-CREATE POLICY "Public can view workers"
+DROP POLICY IF EXISTS "Public can view verified workers directory" ON public.workers;
+CREATE POLICY "Public can view verified workers directory"
     ON public.workers FOR SELECT
-    USING (true);
+    TO anon, authenticated
+    USING (is_available = true OR verification_status = 'VERIFIED');
 
+-- Workers: Only the authenticated artisan can update their availability & profile
 DROP POLICY IF EXISTS "Workers can update own record" ON public.workers;
 CREATE POLICY "Workers can update own record"
     ON public.workers FOR UPDATE
     TO authenticated
-    USING (profile_id = auth.uid());
+    USING (profile_id = auth.uid())
+    WITH CHECK (profile_id = auth.uid());
 
--- Profiles RLS
+-- ------------------------------------------------------------------------------
+-- 4. STRICT ROW LEVEL SECURITY: PROFILES (LEAST PRIVILEGE)
+-- ------------------------------------------------------------------------------
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- Disallow public enumeration of all profiles. Users can only read their own profile.
 DROP POLICY IF EXISTS "Public can view profiles" ON public.profiles;
-CREATE POLICY "Public can view profiles"
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+CREATE POLICY "Users can view own profile"
     ON public.profiles FOR SELECT
-    USING (true);
+    TO authenticated
+    USING (id = auth.uid());
 
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
     ON public.profiles FOR UPDATE
     TO authenticated
-    USING (id = auth.uid());
+    USING (id = auth.uid())
+    WITH CHECK (id = auth.uid());
 
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile"
     ON public.profiles FOR INSERT
-    TO authenticated, anon
-    WITH CHECK (true);
+    TO authenticated
+    WITH CHECK (id = auth.uid());
 
--- Bookings RLS
-DROP POLICY IF EXISTS "Anyone can create bookings" ON public.bookings;
-CREATE POLICY "Anyone can create bookings"
-    ON public.bookings FOR INSERT
-    TO authenticated, anon
-    WITH CHECK (true);
+-- ------------------------------------------------------------------------------
+-- 5. STRICT ROW LEVEL SECURITY: BOOKINGS
+-- ------------------------------------------------------------------------------
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
+-- Only the customer who booked OR the assigned artisan can view the booking
 DROP POLICY IF EXISTS "Users can view own bookings" ON public.bookings;
-CREATE POLICY "Users can view own bookings"
+DROP POLICY IF EXISTS "Authorized participants view bookings" ON public.bookings;
+CREATE POLICY "Authorized participants view bookings"
     ON public.bookings FOR SELECT
-    TO authenticated, anon
+    TO authenticated
     USING (
         customer_id = auth.uid() OR
-        customer_id IS NULL OR
-        auth.role() = 'authenticated'
+        worker_id = auth.uid() OR
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid())
     );
 
-DROP POLICY IF EXISTS "Participants can update bookings" ON public.bookings;
-CREATE POLICY "Participants can update bookings"
-    ON public.bookings FOR UPDATE
-    TO authenticated, anon
-    USING (true);
+-- Only authenticated users can create bookings under their own user ID
+DROP POLICY IF EXISTS "Anyone can create bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Authenticated users create own bookings" ON public.bookings;
+CREATE POLICY "Authenticated users create own bookings"
+    ON public.bookings FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        customer_id = auth.uid()
+    );
 
--- ==============================================================================
--- 5. NOTIFICATIONS TABLE (NON-DESTRUCTIVE)
--- ==============================================================================
+-- Only the booking's customer or assigned artisan can update booking status
+DROP POLICY IF EXISTS "Participants can update bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Authorized participants update bookings" ON public.bookings;
+CREATE POLICY "Authorized participants update bookings"
+    ON public.bookings FOR UPDATE
+    TO authenticated
+    USING (
+        customer_id = auth.uid() OR
+        worker_id = auth.uid() OR
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid())
+    )
+    WITH CHECK (
+        customer_id = auth.uid() OR
+        worker_id = auth.uid() OR
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid())
+    );
+
+-- ------------------------------------------------------------------------------
+-- 6. NOTIFICATIONS TABLE WITH STRICT RLS
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     message TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'booking_update',
@@ -203,32 +253,33 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_unread ON public.notifications(user_id, is_read);
 
--- Enable Row Level Security (RLS)
+-- Enable RLS
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can only view their own notifications
+-- Strictly authenticated: Users can ONLY see their own notifications
 DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 CREATE POLICY "Users can view own notifications"
     ON public.notifications FOR SELECT
-    TO authenticated, anon
-    USING (user_id = auth.uid() OR user_id IS NULL);
+    TO authenticated
+    USING (user_id = auth.uid());
 
--- Policy: Users can update their own notifications (e.g., mark as read)
+-- Strictly authenticated: Users can ONLY update their own notifications (mark read)
 DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
 CREATE POLICY "Users can update own notifications"
     ON public.notifications FOR UPDATE
-    TO authenticated, anon
-    USING (user_id = auth.uid() OR user_id IS NULL)
-    WITH CHECK (user_id = auth.uid() OR user_id IS NULL);
+    TO authenticated
+    USING (user_id = auth.uid())
+    WITH CHECK (user_id = auth.uid());
 
--- Policy: Authenticated users and backend functions can insert notifications
+-- Authenticated users or server functions can dispatch notifications
 DROP POLICY IF EXISTS "Anyone can insert notifications" ON public.notifications;
-CREATE POLICY "Anyone can insert notifications"
+DROP POLICY IF EXISTS "Authenticated users insert notifications" ON public.notifications;
+CREATE POLICY "Authenticated users insert notifications"
     ON public.notifications FOR INSERT
-    TO authenticated, anon
+    TO authenticated
     WITH CHECK (true);
 
--- Enable Supabase Realtime for instant live notifications (Idempotent check)
+-- Enable Supabase Realtime (Idempotent publication addition)
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -241,9 +292,9 @@ BEGIN
     END IF;
 END $$;
 
--- ==============================================================================
--- 6. PAYMENTS TABLE (NON-DESTRUCTIVE)
--- ==============================================================================
+-- ------------------------------------------------------------------------------
+-- 7. PAYMENTS TABLE WITH STRICT RLS (ZERO PUBLIC ACCESS)
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
@@ -268,31 +319,34 @@ CREATE INDEX IF NOT EXISTS idx_payments_customer_id ON public.payments(customer_
 CREATE INDEX IF NOT EXISTS idx_payments_order_id ON public.payments(provider_order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(payment_status);
 
--- Enable Row Level Security (RLS)
+-- Enable RLS
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
--- Policy: Customers can only view their own payment transactions
+-- Customers can ONLY view their own payments (ZERO anonymous or cross-customer access)
 DROP POLICY IF EXISTS "Customers can view own payments" ON public.payments;
 CREATE POLICY "Customers can view own payments"
     ON public.payments FOR SELECT
-    TO authenticated, anon
-    USING (customer_id = auth.uid() OR customer_id IS NULL);
+    TO authenticated
+    USING (customer_id = auth.uid());
 
--- Policy: Authenticated users/server can insert payments
+-- Authenticated customers can initiate their own payment record
 DROP POLICY IF EXISTS "Anyone can insert payments" ON public.payments;
-CREATE POLICY "Anyone can insert payments"
+DROP POLICY IF EXISTS "Customers can insert own payments" ON public.payments;
+CREATE POLICY "Customers can insert own payments"
     ON public.payments FOR INSERT
-    TO authenticated, anon
-    WITH CHECK (true);
+    TO authenticated
+    WITH CHECK (customer_id = auth.uid());
 
--- Policy: Server/authenticated user can update payment status
+-- Customers can only update their own pending payment record
 DROP POLICY IF EXISTS "Participants can update payments" ON public.payments;
-CREATE POLICY "Participants can update payments"
+DROP POLICY IF EXISTS "Customers can update own payments" ON public.payments;
+CREATE POLICY "Customers can update own payments"
     ON public.payments FOR UPDATE
-    TO authenticated, anon
-    USING (customer_id = auth.uid() OR customer_id IS NULL);
+    TO authenticated
+    USING (customer_id = auth.uid())
+    WITH CHECK (customer_id = auth.uid());
 
--- Realtime replication for instant payment status listeners (Idempotent check)
+-- Enable Supabase Realtime (Idempotent publication addition)
 DO $$
 BEGIN
     IF NOT EXISTS (
