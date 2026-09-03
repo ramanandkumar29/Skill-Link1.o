@@ -36,6 +36,13 @@ import {
   BarChart3,
   Sliders
 } from "lucide-react";
+import {
+  getKycWorkers,
+  getKycWorkerById,
+  DetailedKycWorker,
+  finalizeWorkerKycDecision,
+} from "@/lib/kycVerificationService";
+import WorkerVerificationDrawer from "./WorkerVerificationDrawer";
 
 export default function CooperativeAdminDashboard() {
   const [activeTab, setActiveTab] = useState<
@@ -46,49 +53,16 @@ export default function CooperativeAdminDashboard() {
   const [workersList, setWorkersList] = useState<WorkerProfile[]>(INITIAL_WORKERS);
 
   // KYC Verification Queue
-  const [kycQueue, setKycQueue] = useState<
-    Array<{
-      id: string;
-      workerName: string;
-      occupation: string;
-      aadhaarMasked: string;
-      societyReg: string;
-      certificate: string;
-      status: "PENDING" | "VERIFIED" | "REJECTED";
-      submittedDate: string;
-    }>
-  >([
-    {
-      id: "kyc-101",
-      workerName: "Dharmendra Yadav",
-      occupation: "Master Electrician",
-      aadhaarMasked: "XXXX-XXXX-4912",
-      societyReg: "TLCS-2024-512",
-      certificate: "ITI National Trade Certificate (NCVT-EL-8891)",
-      status: "PENDING",
-      submittedDate: "Today, 10:15 AM",
-    },
-    {
-      id: "kyc-102",
-      workerName: "Anita Sharma",
-      occupation: "Certified Home Nurse & Caregiver",
-      aadhaarMasked: "XXXX-XXXX-8821",
-      societyReg: "PTCU-2024-119",
-      certificate: "HSSC Healthcare Skill Council Diploma",
-      status: "PENDING",
-      submittedDate: "Yesterday, 04:30 PM",
-    },
-    {
-      id: "kyc-103",
-      workerName: "Harnek Singh",
-      occupation: "Civil Mason & Tiling Pro",
-      aadhaarMasked: "XXXX-XXXX-1980",
-      societyReg: "TLCS-2024-411",
-      certificate: "CSDCI Construction Skill Council Level 2",
-      status: "PENDING",
-      submittedDate: "Yesterday, 02:00 PM",
-    },
-  ]);
+  const [kycWorkers, setKycWorkers] = useState<DetailedKycWorker[]>(() => getKycWorkers());
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [kycSearch, setKycSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "PRIORITY" | "COMPLETION">("NEWEST");
+
+  const refreshKycWorkers = () => {
+    setKycWorkers(getKycWorkers());
+  };
 
   // Active Dispatches Monitoring
   const [liveBookings] = useState([
@@ -122,16 +96,44 @@ export default function CooperativeAdminDashboard() {
   const [forecastSeason, setForecastSeason] = useState<string>("ALL");
 
   const handleApproveKyc = (id: string) => {
-    setKycQueue((prev) =>
-      prev.map((k) => (k.id === id ? { ...k, status: "VERIFIED" } : k))
-    );
+    finalizeWorkerKycDecision(id, "VERIFIED");
+    refreshKycWorkers();
   };
 
   const handleRejectKyc = (id: string) => {
-    setKycQueue((prev) =>
-      prev.map((k) => (k.id === id ? { ...k, status: "REJECTED" } : k))
-    );
+    finalizeWorkerKycDecision(id, "REJECTED", "Manual inspection check failed");
+    refreshKycWorkers();
   };
+
+  const filteredKycWorkers = kycWorkers
+    .filter((w) => {
+      if (kycSearch.trim()) {
+        const q = kycSearch.toLowerCase().trim();
+        const matchName = w.workerName.toLowerCase().includes(q);
+        const matchId = w.workerId.toLowerCase().includes(q);
+        const matchSoc = w.societyReg.toLowerCase().includes(q);
+        const matchSkill = w.occupation.toLowerCase().includes(q) || w.skills.some((s) => s.toLowerCase().includes(q));
+        if (!matchName && !matchId && !matchSoc && !matchSkill) return false;
+      }
+      if (statusFilter !== "ALL" && w.overallStatus !== statusFilter) return false;
+      if (priorityFilter !== "ALL" && w.priority !== priorityFilter) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "PRIORITY") {
+        const weight: Record<string, number> = { HIGH: 3, MEDIUM: 2, NORMAL: 1 };
+        return (weight[b.priority] || 1) - (weight[a.priority] || 1);
+      }
+      if (sortBy === "COMPLETION") {
+        const pctA = Math.round((a.checklist.filter((c) => c.status === "VERIFIED").length / a.checklist.length) * 100);
+        const pctB = Math.round((b.checklist.filter((c) => c.status === "VERIFIED").length / b.checklist.length) * 100);
+        return pctB - pctA;
+      }
+      if (sortBy === "OLDEST") {
+        return a.id.localeCompare(b.id);
+      }
+      return b.id.localeCompare(a.id);
+    });
 
   const filteredForecasts = DEMAND_FORECAST_DATA.filter((f) => {
     if (forecastSeason === "ALL") return true;
@@ -195,7 +197,7 @@ export default function CooperativeAdminDashboard() {
           <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200">
             <div className="text-[10px] font-bold uppercase text-purple-800">KYC Verification Rate</div>
             <div className="text-2xl font-black text-purple-700 mt-1">98.4%</div>
-            <div className="text-[10px] font-semibold text-purple-800 mt-0.5">{kycQueue.filter(k => k.status === "PENDING").length} Pending Audit</div>
+            <div className="text-[10px] font-semibold text-purple-800 mt-0.5">{kycWorkers.filter(k => k.overallStatus === "PENDING").length} Pending Audit</div>
           </div>
         </div>
       </div>
@@ -204,7 +206,7 @@ export default function CooperativeAdminDashboard() {
       <div className="flex border-b border-slate-200 gap-2 overflow-x-auto text-xs font-bold pb-2">
         {[
           { id: "OVERVIEW", label: "Executive Overview", icon: BarChart3 },
-          { id: "VERIFICATION", label: `Worker KYC Queue (${kycQueue.filter(k => k.status === "PENDING").length})`, icon: FileCheck },
+          { id: "VERIFICATION", label: `Worker KYC Queue (${kycWorkers.filter(k => k.overallStatus === "PENDING").length})`, icon: FileCheck },
           { id: "BOOKINGS", label: `Live Service Bookings (${liveBookings.length})`, icon: Briefcase },
           { id: "WELFARE", label: "Welfare & Insurance Fund", icon: ShieldCheck },
           { id: "FORECASTING", label: "AI Seasonal Demand Forecasting", icon: Sparkles },
@@ -297,91 +299,228 @@ export default function CooperativeAdminDashboard() {
 
       {/* TAB 2: WORKER KYC VERIFICATION QUEUE */}
       {activeTab === "VERIFICATION" && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <FileCheck className="w-5 h-5 text-blue-600" />
                 Service Provider 5-Tier Verification Queue
               </h2>
-              <p className="text-xs text-slate-500">
-                Verify Identity (Aadhaar), Cooperative Membership, Residence Address, Trade Skills, and ITI/NSDC Certifications.
+              <p className="text-xs text-slate-500 mt-0.5">
+                Verify Identity (Aadhaar), Cooperative Membership, Residence Address, Trade Skills, and Accredited Certifications.
               </p>
             </div>
 
-            <div className="text-xs font-bold text-slate-500">
-              Auto-sync with NCVT &amp; Skill India Portal
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+              <span>Manual Cooperative Registry Verification</span>
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
-            {kycQueue.map((item) => (
-              <div
-                key={item.id}
-                className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4"
+          {/* Search, Filter & Sorter Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={kycSearch}
+                onChange={(e) => setKycSearch(e.target.value)}
+                placeholder="Search name, ID, society, skill..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-blue-500 font-medium"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+              <span className="text-[11px] font-bold text-slate-400 shrink-0">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-700 w-full focus:outline-none cursor-pointer"
               >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-900">{item.workerName}</h3>
-                    <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                      {item.occupation}
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      item.status === "VERIFIED"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : item.status === "REJECTED"
-                        ? "bg-rose-50 text-rose-700 border-rose-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
-                    }`}>
-                      {item.status}
-                    </span>
-                  </div>
+                <option value="ALL">All Status ({kycWorkers.length})</option>
+                <option value="PENDING">Pending Only ({kycWorkers.filter(w => w.overallStatus === "PENDING").length})</option>
+                <option value="VERIFIED">Verified ({kycWorkers.filter(w => w.overallStatus === "VERIFIED").length})</option>
+                <option value="REJECTED">Rejected ({kycWorkers.filter(w => w.overallStatus === "REJECTED").length})</option>
+              </select>
+            </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-600 pt-1">
-                    <div>
-                      <span className="text-slate-400">Aadhaar (Masked):</span>{" "}
-                      <span className="font-mono font-bold">{item.aadhaarMasked}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Society ID:</span>{" "}
-                      <span className="font-mono font-bold">{item.societyReg}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Submitted:</span> {item.submittedDate}
-                    </div>
-                  </div>
+            {/* Priority Filter */}
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+              <span className="text-[11px] font-bold text-slate-400 shrink-0">Priority:</span>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-700 w-full focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">All Priorities</option>
+                <option value="HIGH">High Priority Only</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="NORMAL">Normal</option>
+              </select>
+            </div>
 
-                  <p className="text-xs text-slate-700 font-medium flex items-center gap-1.5 pt-0.5">
-                    <FileCheck className="w-3.5 h-3.5 text-blue-600" />
-                    Uploaded Credential: <span className="font-semibold text-slate-900">{item.certificate}</span>
-                  </p>
-                </div>
-
-                {item.status === "PENDING" ? (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleRejectKyc(item.id)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all flex items-center gap-1"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Reject</span>
-                    </button>
-                    <button
-                      onClick={() => handleApproveKyc(item.id)}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all flex items-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Approve &amp; Verify</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-xs font-bold text-slate-500">
-                    Action Logged in Cooperative Registry
-                  </div>
-                )}
-              </div>
-            ))}
+            {/* Sort Sorter */}
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+              <span className="text-[11px] font-bold text-slate-400 shrink-0">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-transparent text-xs font-semibold text-slate-700 w-full focus:outline-none cursor-pointer"
+              >
+                <option value="NEWEST">Newest Submitted</option>
+                <option value="OLDEST">Oldest First</option>
+                <option value="PRIORITY">Highest Priority</option>
+                <option value="COMPLETION">Completion %</option>
+              </select>
+            </div>
           </div>
+
+          {/* Worker Cards List */}
+          <div className="space-y-3 pt-1">
+            {filteredKycWorkers.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <FileCheck className="w-8 h-8 text-slate-300 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-700">No verification requests match your filter</h4>
+                <p className="text-xs text-slate-500">Try resetting search keywords or status filter.</p>
+              </div>
+            ) : (
+              filteredKycWorkers.map((item) => {
+                const verifiedPills = item.checklist.filter((c) => c.status === "VERIFIED").length;
+                const totalPills = item.checklist.length || 5;
+                const completionRate = Math.round((verifiedPills / totalPills) * 100);
+
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedWorkerId(item.id)}
+                    className="p-4 rounded-xl bg-slate-50/80 hover:bg-white border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-2 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                          {item.workerName}
+                        </h3>
+                        <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                          {item.occupation}
+                        </span>
+
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          item.overallStatus === "VERIFIED"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : item.overallStatus === "REJECTED"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
+                          {item.overallStatus}
+                        </span>
+
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          item.priority === "HIGH"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : item.priority === "MEDIUM"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}>
+                          {item.priority} PRIORITY
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-600">
+                        <div>
+                          <span className="text-slate-400">Aadhaar (Masked):</span>{" "}
+                          <span className="font-mono font-bold text-slate-800">{item.aadhaarMasked}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Society ID:</span>{" "}
+                          <span className="font-mono font-bold text-slate-800">{item.societyReg}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Submitted:</span> {item.submittedDate}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700 pt-0.5">
+                        <p className="flex items-center gap-1 font-medium">
+                          <FileCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span>Uploaded Credential:</span>{" "}
+                          <span className="font-semibold text-slate-900">{item.certificateName}</span>
+                        </p>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-[11px] font-semibold text-blue-600 group-hover:underline">
+                          Click to Inspect Full KYC Dossier &amp; Documents →
+                        </span>
+                      </div>
+
+                      {/* Mini 5-tier verification pills */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        {item.checklist.map((chk) => (
+                          <span
+                            key={chk.id}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                              chk.status === "VERIFIED"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : chk.status === "REQUIRES_REVIEW"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-slate-100 text-slate-500 border-slate-200"
+                            }`}
+                          >
+                            {chk.status === "VERIFIED" ? "✓" : "⏳"} {chk.category}
+                          </span>
+                        ))}
+                        <span className="text-[10px] font-mono text-slate-400 ml-1">
+                          ({completionRate}% Checked)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Quick Card Action Buttons */}
+                    <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0">
+                      {item.overallStatus === "PENDING" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRejectKyc(item.id);
+                            }}
+                            className="px-3 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all flex items-center gap-1"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Reject</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleApproveKyc(item.id);
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all flex items-center gap-1"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Approve &amp; Verify</span>
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-xl">
+                          Decision Logged
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* INSPECTION DRAWER */}
+          <WorkerVerificationDrawer
+            worker={selectedWorkerId ? getKycWorkerById(selectedWorkerId) || null : null}
+            onClose={() => setSelectedWorkerId(null)}
+            onWorkerUpdated={refreshKycWorkers}
+          />
         </div>
       )}
 

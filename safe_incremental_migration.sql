@@ -358,3 +358,80 @@ BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.payments;
     END IF;
 END $$;
+
+-- ==============================================================================
+-- 8. WORKER DOCUMENTS TABLE (LEAST PRIVILEGE)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.worker_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    worker_id UUID REFERENCES public.workers(id) ON DELETE CASCADE,
+    document_type TEXT NOT NULL, -- 'aadhaar' | 'skill_certificate' | 'cooperative_card' | 'address_proof'
+    document_name TEXT NOT NULL,
+    file_url TEXT NOT NULL,
+    file_size TEXT,
+    file_type TEXT DEFAULT 'image/jpeg',
+    status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING' | 'VERIFIED' | 'REJECTED' | 'REQUIRES_REVIEW'
+    rejection_reason TEXT,
+    verified_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    verified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_docs_worker_id ON public.worker_documents(worker_id);
+CREATE INDEX IF NOT EXISTS idx_worker_docs_status ON public.worker_documents(status);
+
+ALTER TABLE public.worker_documents ENABLE ROW LEVEL SECURITY;
+
+-- Workers can view their own uploaded documents
+DROP POLICY IF EXISTS "Workers can view own documents" ON public.worker_documents;
+CREATE POLICY "Workers can view own documents"
+    ON public.worker_documents FOR SELECT
+    TO authenticated
+    USING (
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid()) OR
+        worker_id = auth.uid()
+    );
+
+-- Cooperative admins can view and verify worker documents
+DROP POLICY IF EXISTS "Admins can view worker documents" ON public.worker_documents;
+CREATE POLICY "Admins can view worker documents"
+    ON public.worker_documents FOR ALL
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
+
+-- ==============================================================================
+-- 9. KYC AUDIT LOGS TABLE
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.kyc_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    worker_id UUID REFERENCES public.workers(id) ON DELETE CASCADE,
+    admin_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL, -- 'SUBMITTED' | 'DOC_APPROVED' | 'DOC_REJECTED' | 'APPLICATION_APPROVED' | 'APPLICATION_REJECTED'
+    document_id UUID REFERENCES public.worker_documents(id) ON DELETE SET NULL,
+    details TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_kyc_audit_worker_id ON public.kyc_audit_logs(worker_id);
+
+ALTER TABLE public.kyc_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Admins and workers can view audit history
+DROP POLICY IF EXISTS "Participants view kyc audit" ON public.kyc_audit_logs;
+CREATE POLICY "Participants view kyc audit"
+    ON public.kyc_audit_logs FOR SELECT
+    TO authenticated
+    USING (
+        worker_id IN (SELECT id FROM public.workers WHERE profile_id = auth.uid()) OR
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('cooperative_admin', 'super_admin')
+        )
+    );
